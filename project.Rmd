@@ -47,6 +47,7 @@ faang <- faang %>%
   group_by(STOCK) %>%
   group_by(DATE)
 
+head(faang)
 
 faang <- faang %>% 
   mutate(ticker = case_when(
@@ -58,28 +59,15 @@ faang <- faang %>%
     TRUE ~ "Other"
   ))
 
+faang$DATE <- dmy(faang$DATE)
+head(faang)
 
-
-print(faang)
 ```
 ```{r} 
-# Define the stock symbol (e.g., Apple Inc.)
-symbol <- "AAPL"
-
-# Download historical data using getSymbols
-getSymbols(symbol)
-
-# Extract market cap information
-market_cap <- Cl(get(symbol)) * Op(get(symbol, env = .GlobalEnv))
-
-# Print market cap information
-print(market_cap)
-
-# Download dividend data using getDividends
-dividend_data <- getDividends(symbol)
-
-# Print dividend information
-print(dividend_data)
+faang <- faang %>% 
+  mutate(market_cap = case_when(
+  ticker == "AAPL" ~ apple_mc %>% filter(date == DATE),
+  ))
 
 
 ```
