@@ -1,0 +1,87 @@
+
+```{r}
+library(quanteda)
+library(ggrepel)
+library(textclean)
+library(tidyverse)
+library(glmnet)
+library(pROC)
+library(knitr)
+library(dplyr)
+library(dtplyr)
+library(data.table)
+library(lubridate)
+library(xts)
+library(PerformanceAnalytics)
+library(knitr)
+library(kableExtra)
+library(quantmod)
+```
+
+
+
+```{r}
+my_data <- fread("full_dataset-release.csv")
+```
+
+```{r}
+new <- my_data %>%
+  group_by(STOCK, DATE) %>%
+  summarise(average_polarity = mean(LSTM_POLARITY)) %>%
+  filter(STOCK == 'Facebook')
+
+
+```
+
+
+```{r}
+
+faang <- my_data %>%
+  filter(STOCK %in% c("Facebook", "Apple", "Amazon", "Netflix", "Google"))
+
+```
+
+
+```{r}
+faang <- faang %>%
+  group_by(STOCK) %>%
+  group_by(DATE)
+
+
+faang <- faang %>% 
+  mutate(ticker = case_when(
+    STOCK == "Apple" ~ "AAPL",
+    STOCK == "Amazon" ~ "AMZN",
+    STOCK == "Netflix" ~ "NFLX",
+    STOCK == "Facebook" ~ "META",
+    STOCK == "Google" ~ "GOOGL",
+    TRUE ~ "Other"
+  ))
+
+
+
+print(faang)
+```
+```{r} 
+# Define the stock symbol (e.g., Apple Inc.)
+symbol <- "AAPL"
+
+# Download historical data using getSymbols
+getSymbols(symbol)
+
+# Extract market cap information
+market_cap <- Cl(get(symbol)) * Op(get(symbol, env = .GlobalEnv))
+
+# Print market cap information
+print(market_cap)
+
+# Download dividend data using getDividends
+dividend_data <- getDividends(symbol)
+
+# Print dividend information
+print(dividend_data)
+
+
+```
+
+

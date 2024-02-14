@@ -1,6 +1,8 @@
 # History files
 .Rhistory
 .Rapp.history
+full_dataset-release.csv
+reduced_dataset-release.csv
 
 # Session Data files
 .RData
