@@ -3,6 +3,7 @@
 .Rapp.history
 full_dataset-release.csv
 reduced_dataset-release.csv
+.DS_Store
 
 # Session Data files
 .RData
