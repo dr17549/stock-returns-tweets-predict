@@ -4,7 +4,7 @@
 full_dataset-release.csv
 reduced_dataset-release.csv
 .DS_Store
-group project.Rproject
+group project.Rproj
 twcs.csv
 
 # Session Data files
