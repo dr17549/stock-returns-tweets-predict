@@ -20,15 +20,13 @@ library(kableExtra)
 
 
 ```{r}
-my_data <- fread("full_dataset-release.csv")
+df <- fread("full_dataset-release.csv")
 ```
 
 ```{r}
-new <- my_data %>%
-  group_by(STOCK, DATE) %>%
-  summarise(average_polarity = mean(LSTM_POLARITY)) %>%
-  filter(STOCK == 'Facebook')
+#renaming columns
 
+df <- rename(df, TWEET = tweet)
 
 ```
 
