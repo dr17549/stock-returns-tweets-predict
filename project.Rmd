@@ -15,6 +15,7 @@ library(xts)
 library(PerformanceAnalytics)
 library(knitr)
 library(kableExtra)
+library(dplyr)
 ```
 
 
@@ -25,48 +26,190 @@ df <- fread("full_dataset-release.csv")
 
 ```{r}
 #renaming columns
+df <- df %>%
+  rename(
+    tweet = TWEET,
+    stock = STOCK,
+    one_day_return ="1_DAY_RETURN", 
+    seven_day_return = "7_DAY_RETURN",
+    date = DATE
+  )
 
-df <- rename(df, TWEET = tweet)
+df <- df %>%
+  mutate(date = as.Date(date, format = "%d/%m/%Y"))
 
 ```
 
+
+
+Let's Do some sanity checks on the data and check for consistency. 
+
+Every tweet of the same company on the same day should have the same price/ volatility/ basically all other meta data
+
+
+
+Number of Tweets per company 
+```{r}
+tweet_counts <- df %>%
+  group_by(stock) %>%
+  summarise(num_tweets = n())
+
+tweet_counts <- tweet_counts %>%
+  arrange(desc(num_tweets))
+
+top_10 <- head(tweet_counts, 10)
+lowest_10 <- tail(tweet_counts, 10)
+
+ggplot(top_10, aes(x = reorder(stock, num_tweets), y = num_tweets)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  geom_text(aes(label = num_tweets), vjust = -0.5, size = 3) +
+  labs(x = "Company", y = "Number of Tweets", title = "Top 10 Companies by Number of Tweets") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(lowest_10, aes(x = reorder(stock, num_tweets), y = num_tweets)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  geom_text(aes(label = num_tweets), vjust = -0.5, size = 3) +
+  labs(x = "Company", y = "Number of Tweets", title = "Lowest 10 Companies by Number of Tweets") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+faang_tweet_counts <- df %>%
+  filter(stock %in% c("Facebook", "Apple", "Amazon", "Netflix", "Google")) %>%
+  group_by(stock) %>%
+  summarise(num_tweets = n())
+
+
+ggplot(faang_tweet_counts, aes(x = reorder(stock, num_tweets), y = num_tweets)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  geom_text(aes(label = num_tweets), vjust = -0.5, size = 3) +
+  labs(x = "Company", y = "Number of Tweets", title = "FAANG by Number of Tweets") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
 
 ```{r}
 
-faang <- my_data %>%
-  filter(STOCK %in% c("Facebook", "Apple", "Amazon", "Netflix", "Google"))
+```
 
 
 
+Number of Tweets with Positive vs. Negative Sentiment (According to LTSM and Textblob Polarity)
+
+```{r}
+# Calculate summary statistics for LSTM_POLARITY and TEXTBLOB_POLARITY by stock
+sentiment_summary <- df %>%
+  group_by(stock) %>%
+  summarise(
+    avg_lstm_polarity = mean(LSTM_POLARITY, na.rm = TRUE),
+    avg_textblob_polarity = mean(TEXTBLOB_POLARITY, na.rm = TRUE),
+    total_tweets = n()
+  )
+
+# Visualize sentiment scores for each stock
+# You can use bar plots or other visualizations as per your preference
+ggplot(sentiment_summary, aes(x = reorder(stock, avg_lstm_polarity), y = avg_lstm_polarity)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(x = "Stock", y = "Average LSTM Polarity", title = "Average LSTM Polarity by Stock") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(sentiment_summary, aes(x = reorder(stock, avg_textblob_polarity), y = avg_textblob_polarity)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(x = "Stock", y = "Average TextBlob Polarity", title = "Average TextBlob Polarity by Stock") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+faang_sentiment_summary <- sentiment_summary %>%
+    filter(stock %in% c("Facebook", "Apple", "Amazon", "Netflix", "Google")) 
+ 
+
+ggplot(faang_sentiment_summary, aes(x = reorder(stock, avg_lstm_polarity), y = avg_lstm_polarity)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(x = "Stock", y = "FAANG Average LSTM Polarity", title = "FAANG Average LSTM Polarity by Stock") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(faang_sentiment_summary, aes(x = reorder(stock, avg_textblob_polarity), y = avg_textblob_polarity)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(x = "Stock", y = "FAANG Average TextBlob Polarity", title = "FAANG Average TextBlob Polarity by Stock") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+```
+Since all the FAANGs have positive sentiment, training on FAANG might not yield great results for transfer learning because our model may not be exposed to negative sentiment 
+
+Let's Zoom into FAANG: 
+```{r}
+
+faang <- df %>%
+  filter(stock %in% c("Facebook", "Apple", "Amazon", "Netflix", "Google"))
+
+
+
+```
+
+Across Dates: 
+```{r}
+tweet_counts <- faang %>%
+  filter(year(date) == 2017) %>%
+  group_by(date) %>%
+  summarise(num_tweets = n())
+
+# Plot the number of tweets per date
+ggplot(tweet_counts, aes(x = date, y = num_tweets)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(x = "Date", y = "Number of Tweets", title = "Number of Tweets per Date in 2017") +
+  theme_minimal() 
+```
+Interesting we see that the vast majority of the tweets come  either the first or last day of the month for 2017
+
+```{r}
+tweet_counts <- faang %>%
+  filter(year(date) == 2018) %>%
+  group_by(date) %>%
+  summarise(num_tweets = n())
+
+# Plot the number of tweets per date
+ggplot(tweet_counts, aes(x = date, y = num_tweets)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(x = "Date", y = "Number of Tweets", title = "Number of Tweets per Date in 2018") +
+  theme_minimal() 
+```
+For 2018 it is much more evenly distributed across the months, however we also see some gaps in the data, such as the first half of the year and the month of October. 
+
+Let's look at Tweet Word Count: 
+```{r}
+df <- df %>%
+  mutate(tweet_wordcount=str_count(tweet,"[[:alpha:]]+"))
+
+
+summarized <-   df %>%
+                group_by(stock) %>%
+                summarise(avg = mean(tweet_wordcount, na.rm = TRUE))
+
+# Print the result
+print(summarized)
+print(mean(summarized$avg))
+print(sd(summarized$avg))
 ```
 
 ```{r}
-faang <- faang %>%
-  mutate(tweet_wordcount=str_count(TWEET,"[[:alpha:]]+"))
+DFM <- TMEF_dfm(faang$tweet,ngrams=1:2)
 ```
 
 
-```{r}
-my_data <- my_data %>%
-  mutate(tweet_wordcount=str_count(TWEET,"[[:alpha:]]+"))
-```
 
 ```{r}
 length(unique(my_data$STOCK))
 ```
-```{r}
 
-grouped_df <- my_data %>%
-  group_by(STOCK, DATE) %>%
-  summarize(num_unique_values = n_distinct(1_DAY_RETURN), .groups = 'drop')
-  
-  
-  
-```
 
-```{r}
-grouped_df <- my_data %>%
-```
+
+
 
 
 ```{r}
@@ -101,9 +244,22 @@ TMEF_dfm<-function(text,
 }
 ```
 
-
 ```{r}
-sub_data <- 
+word_freq <- colSums(DFM)
+
+# Convert the frequencies to a dataframe
+word_freq_df <- data.frame(word = names(word_freq), freq = word_freq)
+
+# Sort the dataframe by frequency in descending order
+word_freq_df <- word_freq_df[order(-word_freq_df$freq), ]
+
+# Plot the top N most common words
+top_n <- 50  # Adjust this value to plot more or fewer words
+ggplot(head(word_freq_df, top_n), aes(x = reorder(word, freq), y = freq)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(x = "Word", y = "Frequency", title = "Top 20 Most Common Words") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
 
