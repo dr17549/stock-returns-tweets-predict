@@ -16,6 +16,7 @@ library(PerformanceAnalytics)
 library(knitr)
 library(kableExtra)
 library(dplyr)
+source("TMEF_dfm.R")
 ```
 
 
@@ -48,7 +49,7 @@ Every tweet of the same company on the same day should have the same price/ vola
 
 
 
-Number of Tweets per company 
+# Number of Tweets per company 
 ```{r}
 tweet_counts <- df %>%
   group_by(stock) %>%
@@ -90,13 +91,9 @@ ggplot(faang_tweet_counts, aes(x = reorder(stock, num_tweets), y = num_tweets)) 
 
 ```
 
-```{r}
-
-```
 
 
-
-Number of Tweets with Positive vs. Negative Sentiment (According to LTSM and Textblob Polarity)
+# Number of Tweets with Positive vs. Negative Sentiment (According to LTSM and Textblob Polarity)
 
 ```{r}
 # Calculate summary statistics for LSTM_POLARITY and TEXTBLOB_POLARITY by stock
@@ -140,6 +137,7 @@ ggplot(faang_sentiment_summary, aes(x = reorder(stock, avg_textblob_polarity), y
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
 
 ```
+
 Since all the FAANGs have positive sentiment, training on FAANG might not yield great results for transfer learning because our model may not be exposed to negative sentiment 
 
 Let's Zoom into FAANG: 
@@ -147,8 +145,6 @@ Let's Zoom into FAANG:
 
 faang <- df %>%
   filter(stock %in% c("Facebook", "Apple", "Amazon", "Netflix", "Google"))
-
-
 
 ```
 
@@ -201,47 +197,12 @@ print(sd(summarized$avg))
 DFM <- TMEF_dfm(faang$tweet,ngrams=1:2)
 ```
 
-
-
 ```{r}
 length(unique(my_data$STOCK))
 ```
 
-
-
-
-
-
 ```{r}
 sum(is.na(my_data))
-```
-
-
-```{r}
-TMEF_dfm<-function(text,
-                   ngrams=1,
-                   stop.words=TRUE,
-                   min.prop=.01){
-  # First, we check our input is correct
-  if(!is.character(text)){  
-    stop("Must input character vector")
-  }
-  drop_list=""
-  #uses stop.words arugment to adjust what is dropped
-  if(stop.words) drop_list=stopwords("en") 
-  # quanteda pipeline
-  text_data<-text %>%
-    replace_contraction() %>%
-    tokens(remove_numbers=TRUE,
-           remove_punct = TRUE) %>%
-    tokens_wordstem() %>%
-    tokens_select(pattern = drop_list, 
-                  selection = "remove") %>%
-    tokens_ngrams(ngrams) %>%
-    dfm() %>%
-    dfm_trim(min_docfreq = min.prop,docfreq_type="prop")
-  return(text_data)
-}
 ```
 
 ```{r}
