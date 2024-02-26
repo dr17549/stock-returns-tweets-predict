@@ -17,6 +17,9 @@ library(knitr)
 library(kableExtra)
 library(dplyr)
 source("TMEF_dfm.R")
+
+# Classifiers
+library(naivebayes)
 ```
 
 
@@ -138,6 +141,9 @@ ggplot(faang_sentiment_summary, aes(x = reorder(stock, avg_textblob_polarity), y
 
 ```
 
+
+# Focusing on FAANG 
+
 Since all the FAANGs have positive sentiment, training on FAANG might not yield great results for transfer learning because our model may not be exposed to negative sentiment 
 
 Let's Zoom into FAANG: 
@@ -193,6 +199,8 @@ print(mean(summarized$avg))
 print(sd(summarized$avg))
 ```
 
+
+# Build a DFM for FAANG 
 ```{r}
 DFM <- TMEF_dfm(faang$tweet,ngrams=1:2)
 ```
@@ -225,15 +233,12 @@ ggplot(head(word_freq_df, top_n), aes(x = reorder(word, freq), y = freq)) +
 
 
 ```{r}
-
-
-
 mini <- sample(1:nrow(faang),20000)
 
 faang_small<-faang%>%
   slice(mini)
 
-faang_small$made_money <- ifelse(faang_small$"1_DAY_RETURN" < 0, 0, 1)
+faang_small$made_money <- ifelse(faang_small$"one_day_return" < 0, 0, 1)
 
 train_split <- sample(1:nrow(faang_small),10000)
 
@@ -243,29 +248,23 @@ my_data_sample<-faang_small%>%
 test_data<-faang_small %>%
   slice(-train_split)
 
-
 faang_train_Y<-my_data_sample %>%
   pull(made_money)
 
 test_Y<-test_data %>%
   pull(made_money)
 
-dfm_faang_train_pros <-TMEF_dfm(my_data_sample$TWEET,ngrams=1:2) %>%
+dfm_faang_train_pros <-TMEF_dfm(my_data_sample$tweet,ngrams=1:2) %>%
   convert(to="matrix")
 
 faang_model_pros<-cv.glmnet(x=dfm_faang_train_pros,
                              y=faang_train_Y)
 
-# check the tuning to see if there is useful information
-plot(amazon_model_pros)
-
-
-
 ```
+
 ```{r}
 
-
-dfm_faang_test_pros<-TMEF_dfm(test_data$TWEET,
+dfm_faang_test_pros<-TMEF_dfm(test_data$tweet,
                                ngrams=1:2,
                                min.prop = 0) %>%
   dfm_match(colnames(dfm_faang_train_pros)) %>%
@@ -273,27 +272,35 @@ dfm_faang_test_pros<-TMEF_dfm(test_data$TWEET,
 
 faang_test_predict_pros<-predict(faang_model_pros,
                                   newx = dfm_faang_test_pros)[,1]
-hist(amazon_test_predict_pros)
-hist(test_Y)
 
+hist(test_Y)
 
 pros_acc<-kendall_acc(faang_test_predict_pros,test_Y)
 
+head(faang_test_predict_pros)
+
 pros_acc
+
+round(100*mean(test_predict_binary==test_Y),3)
 ```
 
+# Naive Bayes 
 ```{r}
-kendall_acc<-function(x,y,percentage=TRUE){
-  kt=cor(x,y,method="kendall")
-  kt.acc=.5+kt/2
-  kt.se=sqrt((kt.acc*(1-kt.acc))/length(x))
-  report=data.frame(acc=kt.acc,
-                    lower=kt.acc-1.96*kt.se,
-                    upper=kt.acc+1.96*kt.se)
-  report = round(report,4)
-  if(percentage) report = report*100
-  return(report)
-}
+# Change format of the dataset so it works with the naive bayes function 
+naive_bayes_train <- as.data.frame(cbind(dfm_faang_train_pros, faang_train_Y))
+naive_bayes_train$faang_train_Y <- as.factor(df_from_array$faang_train_Y)
+faang_model_pros <- naive_bayes(faang_train_Y ~ ., data = naive_bayes_train)
+
+# Change format of the test dataset so it works with the naive bayes function 
+naive_bayes_test <- as.data.frame(cbind(dfm_faang_test_pros, test_Y))
+naive_bayes_test$faang_train_Y <- as.factor(df_from_array$faang_train_Y)
+
+faang_test_predict_pros<-predict(faang_model_pros,newdata = df_test)
+head(faang_test_predict_pros)
+
+# Accuracy 
+round(100*mean(faang_test_predict_pros==test_Y),3)
+
 ```
 
 
