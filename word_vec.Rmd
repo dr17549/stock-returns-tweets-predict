@@ -172,8 +172,10 @@ vdat<-vecCheck(facebook$tweet,
                wfFile,
                PCAtrim=1)
 
+vdat_test <- readRDS("facebook_vdat.RDS")
+
 # head(vdat)
-saveRDS(vdat,file="facebook_vdat.RDS")
+# saveRDS(vdat,file="facebook_vdat.RDS")
 
 vdat_train<-vdat[train_split,]
 vdat_test<-vdat[-train_split,]
@@ -195,7 +197,5 @@ test_vec_predict<-predict(lasso_vec,newx = vdat_test,
                           s="lambda.min")
 
 kendall_acc(test_vec_predict,test_data$made_money)
-
-
 
 ```
