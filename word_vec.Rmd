@@ -142,8 +142,8 @@ facebook_test_predict <-predict(faang_model,
 # dfm_faang_train<-readRDS("facebook_train.RDS")
 # dfm_faang_test<-readRDS("facebook_train.RDS")
 
-saveRDS(facebook_train,file="facebook_train.RDS")
-saveRDS(facebook_test,file="facebook_test.RDS")
+# saveRDS(facebook_train,file="facebook_train.RDS")
+# saveRDS(facebook_test,file="facebook_test.RDS")
 
 test_predict_binary=ifelse(facebook_test_predict>median(facebook_test_predict),
                            1,
@@ -152,7 +152,15 @@ test_predict_binary=ifelse(facebook_test_predict>median(facebook_test_predict),
 round(100*mean(test_predict_binary==test_Y),3)
 ```
 
+# Applying Word Vector to Facebook data
 ```{r}
+train_split <- sample(1:nrow(facebook),0.8 * nrow(facebook))
+
+train_data<-facebook%>%
+  slice(train_split)
+
+test_data<-facebook %>%
+  slice(-train_split)
 
 # word vector 
 vecSmall<-readRDS("vecSmall.RDS")
@@ -163,5 +171,31 @@ vdat<-vecCheck(facebook$tweet,
                vecSmall,
                wfFile,
                PCAtrim=1)
+
+# head(vdat)
+saveRDS(vdat,file="facebook_vdat.RDS")
+
+vdat_train<-vdat[train_split,]
+vdat_test<-vdat[-train_split,]
+# Train a vector classifier
+lasso_vec<-glmnet::cv.glmnet(x=vdat_train,
+                             y=train_data$made_money)
+
+# notice two lines - one is at the minimum, the other is more conservative 
+plot(lasso_vec)
+
+# the default chooses the more conservative one, with fewer features
+test_all_predict<-predict(lasso_vec,
+                          newx = vdat_test)
+
+kendall_acc(test_all_predict,test_data$made_money)
+
+# this is how you use the minimum one - usually it produces better accuracy
+test_vec_predict<-predict(lasso_vec,newx = vdat_test,
+                          s="lambda.min")
+
+kendall_acc(test_vec_predict,test_data$made_money)
+
+
 
 ```
