@@ -30,6 +30,7 @@ library(randomForest)
 
 # Pre-processing
 ```{r}
+set.seed(2022)
 df <- fread("full_dataset-release.csv")
 df <- df %>%
   rename(
@@ -55,42 +56,45 @@ print(paste("Number of rows:", nrow(faang)))
 # Split train test dataset 
 train_split <- sample(1:nrow(faang),0.8 * nrow(faang))
 
-train_data<-faang%>%
+# Training data 
+faang_train_data<-faang %>%
   slice(train_split)
 
-test_data<-faang %>%
-  slice(-train_split)
-
-faang_train_Y<-train_data %>%
+faang_train_Y<-faang_train_data %>%
   pull(made_money)
 
-test_Y<-train_data %>%
+# Test Data 
+faang_test_data<-faang %>%
+  slice(-train_split)
+
+faang_test_Y<-faang_test_data %>%
   pull(made_money)
 
 # Create a DFM of the train dataset 
-# dfm_faang_train <-TMEF_dfm(train_data$tweet,ngrams=1:2) %>%
-#   convert(to="matrix")
+dfm_faang_train <-TMEF_dfm(faang_train_data$tweet,ngrams=1:2) %>%
+  convert(to="matrix")
 
 # Read DFM from RDS file instead 
-dfm_faang_train<-readRDS("dfm_faang_train.RDS")
-dfm_faang_test<-readRDS("dfm_faang_test.RDS")
-
+# dfm_faang_train<-readRDS("dfm_faang_train.RDS")
+# dfm_faang_test<-readRDS("dfm_faang_test.RDS")
 
 faang_model<-cv.glmnet(x=dfm_faang_train,
                              y=faang_train_Y)
 
-# dfm_faang_test <-TMEF_dfm(test_data$tweet,
-#                                ngrams=1:2,
-#                                min.prop = 0) %>%
-#   dfm_match(colnames(dfm_faang_train)) %>%
-#   convert(to="matrix")
+dfm_faang_test <-TMEF_dfm(faang_test_data$tweet,
+                               ngrams=1:2,
+                               min.prop = 0) %>%
+  dfm_match(colnames(dfm_faang_train)) %>%
+  convert(to="matrix")
 
 faang_test_predict<-predict(faang_model,
                                   newx = dfm_faang_test)[,1]
 
-test_predict_binary=ifelse(faang_test_predict>median(faang_test_predict),
+test_predict_binary=ifelse(faang_test_predict>0,
                            1,
-                           0) 
+                           -1)
+
+kendall_acc(faang_test_predict,test_Y)
 
 # Save DFM into RDS file 
 # saveRDS(dfm_faang_train,file="dfm_faang_train.RDS")
@@ -98,6 +102,42 @@ test_predict_binary=ifelse(faang_test_predict>median(faang_test_predict),
 
 # Accuracy 
 round(100*mean(test_predict_binary==test_Y),3)
+
+# extract coefficients
+plotCoefs<-faang_model %>%
+  coef() %>%
+  drop() %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "ngram") %>%
+  rename(score=".") %>%
+  filter(score!=0 & ngram!="(Intercept)" & !is.na(score))  
+
+# merge frequencies
+plotDat<-plotCoefs %>%
+  left_join(data.frame(ngram=colnames(facebook_test),
+                       freq=colMeans(facebook_test))) %>%
+  mutate_at(vars(score,freq),~round(.,3))
+
+# pipe into ggplot
+plotDat %>%
+  ggplot(aes(x=score,y=freq,label=ngram,color=score)) +
+  scale_color_gradient2(low="navyblue",
+                        mid = "grey",
+                        high="forestgreen",
+                        midpoint = 0)+
+  geom_vline(xintercept=0)+
+  geom_point() +
+  geom_label_repel(max.overlaps = 15)+  
+  scale_x_continuous(limits = c(-.2,.1),
+                     breaks = seq(-.2,.2,.05)) +
+  scale_y_continuous(trans="log2",
+                     breaks=c(.01,.05,.1,.2,.5,1,2,5))+
+  theme_bw() +
+  labs(x="Coefficient in Star Rating Model",y="Uses per Review")+
+  theme(legend.position = "none",
+        axis.title=element_text(size=20),
+        axis.text=element_text(size=16))
+
 ```
 
 # Facebook Model and accuracy (Up Down) 
@@ -111,33 +151,33 @@ print(paste("Number of rows:", nrow(facebook)))
 # Split train test dataset 
 train_split <- sample(1:nrow(facebook),0.8 * nrow(facebook))
 
-train_data<-facebook%>%
+train_X<-facebook%>%
   slice(train_split)
 
-test_data<-facebook %>%
+test_X<-facebook %>%
   slice(-train_split)
 
-faang_train_Y<-train_data %>%
+train_Y<-train_data %>%
   pull(made_money)
 
-test_Y<-train_data %>%
+test_Y<-test_data %>%
   pull(made_money)
 
 # Create a DFM of the train dataset 
-facebook_train <-TMEF_dfm(train_data$tweet,ngrams=1:2) %>%
+facebook_train <-TMEF_dfm(train_X$tweet,ngrams=1:2) %>%
   convert(to="matrix")
 
-faang_model<-cv.glmnet(x=dfm_faang_train,
-                             y=faang_train_Y)
+facebook_model <-cv.glmnet(x=facebook_train,
+                             y=train_Y)
 
-facebook_test <-TMEF_dfm(test_data$tweet,
+facebook_test <-TMEF_dfm(test_X$tweet,
                                ngrams=1:2,
                                min.prop = 0) %>%
-  dfm_match(colnames(dfm_faang_train)) %>%
+  dfm_match(colnames(facebook_train)) %>%
   convert(to="matrix")
 
-facebook_test_predict <-predict(faang_model,
-                                  newx = dfm_faang_test)[,1]
+facebook_test_predict <-predict(facebook_model,
+                                  newx = facebook_test)[,1]
 
 # dfm_faang_train<-readRDS("facebook_train.RDS")
 # dfm_faang_test<-readRDS("facebook_train.RDS")
@@ -145,11 +185,47 @@ facebook_test_predict <-predict(faang_model,
 # saveRDS(facebook_train,file="facebook_train.RDS")
 # saveRDS(facebook_test,file="facebook_test.RDS")
 
-test_predict_binary=ifelse(facebook_test_predict>median(facebook_test_predict),
+test_predict_binary=ifelse(facebook_test_predict>0.5,
                            1,
                            0) 
 # Accuracy 
 round(100*mean(test_predict_binary==test_Y),3)
+
+# extract coefficients
+plotCoefs<-faang_model %>%
+  coef() %>%
+  drop() %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "ngram") %>%
+  rename(score=".") %>%
+  filter(score!=0 & ngram!="(Intercept)" & !is.na(score))  
+
+# merge frequencies
+plotDat<-plotCoefs %>%
+  left_join(data.frame(ngram=colnames(facebook_test),
+                       freq=colMeans(facebook_test))) %>%
+  mutate_at(vars(score,freq),~round(.,3))
+
+# pipe into ggplot
+plotDat %>%
+  ggplot(aes(x=score,y=freq,label=ngram,color=score)) +
+  scale_color_gradient2(low="navyblue",
+                        mid = "grey",
+                        high="forestgreen",
+                        midpoint = 0)+
+  geom_vline(xintercept=0)+
+  geom_point() +
+  geom_label_repel(max.overlaps = 15)+  
+  scale_x_continuous(limits = c(-.2,.1),
+                     breaks = seq(-.2,.2,.05)) +
+  scale_y_continuous(trans="log2",
+                     breaks=c(.01,.05,.1,.2,.5,1,2,5))+
+  theme_bw() +
+  labs(x="Coefficient in Star Rating Model",y="Uses per Review")+
+  theme(legend.position = "none",
+        axis.title=element_text(size=20),
+        axis.text=element_text(size=16))
+
 ```
 
 # Applying Word Vector to Facebook data

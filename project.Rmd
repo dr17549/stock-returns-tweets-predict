@@ -245,8 +245,6 @@ faang_small<-faang%>%
 
 faang_small$made_money <- ifelse(faang_small$"one_day_return" < 0, 0, 1)
 
-print(paste("Number of rows:", nrow(faang_small)))
-
 
 train_split <- sample(1:nrow(faang_small),10000)
 
@@ -285,8 +283,6 @@ dfm_faang_test_pros<-TMEF_dfm(test_data$tweet,
 
 faang_test_predict_pros<-predict(faang_model_pros,
                                   newx = dfm_faang_test_pros)[,1]
-
-hist(test_Y)
 
 pros_acc<-kendall_acc(faang_test_predict_pros,test_Y)
 
