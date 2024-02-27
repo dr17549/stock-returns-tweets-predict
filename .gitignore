@@ -6,6 +6,7 @@ reduced_dataset-release.csv
 .DS_Store
 group project.Rproj
 twcs.csv
+facebook_vdat.RDS
 
 # Session Data files
 .RData
