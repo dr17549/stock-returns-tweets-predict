@@ -57,44 +57,44 @@ print(paste("Number of rows:", nrow(faang)))
 train_split <- sample(1:nrow(faang),0.8 * nrow(faang))
 
 # Training data 
-faang_train_data<-faang %>%
+train_X <-faang %>%
   slice(train_split)
 
-faang_train_Y<-faang_train_data %>%
+train_Y <- train_X %>%
   pull(made_money)
 
 # Test Data 
-faang_test_data<-faang %>%
+test_X <-faang %>%
   slice(-train_split)
 
-faang_test_Y<-faang_test_data %>%
+test_Y <-test_X %>%
   pull(made_money)
 
 # Create a DFM of the train dataset 
-dfm_faang_train <-TMEF_dfm(faang_train_data$tweet,ngrams=1:2) %>%
+dfm_train <-TMEF_dfm(train_X$tweet,ngrams=1:2) %>%
   convert(to="matrix")
 
 # Read DFM from RDS file instead 
 # dfm_faang_train<-readRDS("dfm_faang_train.RDS")
 # dfm_faang_test<-readRDS("dfm_faang_test.RDS")
 
-faang_model<-cv.glmnet(x=dfm_faang_train,
-                             y=faang_train_Y)
+faang_model<-cv.glmnet(x=dfm_train,
+                             y=train_Y)
 
-dfm_faang_test <-TMEF_dfm(faang_test_data$tweet,
+dfm_test <-TMEF_dfm(test_X$tweet,
                                ngrams=1:2,
                                min.prop = 0) %>%
-  dfm_match(colnames(dfm_faang_train)) %>%
+  dfm_match(colnames(dfm_train)) %>%
   convert(to="matrix")
 
-faang_test_predict<-predict(faang_model,
-                                  newx = dfm_faang_test)[,1]
+test_predict <- predict(faang_model,
+                                  newx = dfm_test)[,1]
 
-test_predict_binary=ifelse(faang_test_predict>0,
+test_predict_binary=ifelse(test_predict > 0.5,
                            1,
-                           -1)
+                           0)
 
-kendall_acc(faang_test_predict,test_Y)
+kendall_acc(test_predict,test_Y)
 
 # Save DFM into RDS file 
 # saveRDS(dfm_faang_train,file="dfm_faang_train.RDS")
@@ -157,10 +157,10 @@ train_X<-facebook%>%
 test_X<-facebook %>%
   slice(-train_split)
 
-train_Y<-train_data %>%
+train_Y<-train_X %>%
   pull(made_money)
 
-test_Y<-test_data %>%
+test_Y<-test_X %>%
   pull(made_money)
 
 # Create a DFM of the train dataset 
@@ -184,6 +184,9 @@ facebook_test_predict <-predict(facebook_model,
 
 # saveRDS(facebook_train,file="facebook_train.RDS")
 # saveRDS(facebook_test,file="facebook_test.RDS")
+
+kendall_acc(facebook_test_predict,test_Y)
+
 
 test_predict_binary=ifelse(facebook_test_predict>0.5,
                            1,
