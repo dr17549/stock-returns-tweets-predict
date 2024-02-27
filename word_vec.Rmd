@@ -1,0 +1,85 @@
+```{r}
+library(quanteda)
+library(ggrepel)
+library(textclean)
+library(tidyverse)
+library(glmnet)
+library(pROC)
+library(knitr)
+library(dplyr)
+library(dtplyr)
+library(data.table)
+library(lubridate)
+library(xts)
+library(PerformanceAnalytics)
+library(knitr)
+library(kableExtra)
+library(dplyr)
+source("TMEF_dfm.R")
+
+# Classifiers
+library(naivebayes)
+library(randomForest)
+```
+
+# Pre-processing
+```{r}
+df <- fread("full_dataset-release.csv")
+df <- df %>%
+  rename(
+    tweet = TWEET,
+    stock = STOCK,
+    one_day_return ="1_DAY_RETURN", 
+    seven_day_return = "7_DAY_RETURN",
+    date = DATE
+  ) %>% 
+  mutate(date = as.Date(date, format = "%d/%m/%Y"))
+```
+
+# FAANG models 
+```{r}
+
+faang <- df %>%
+  filter(stock %in% c("Facebook", "Apple", "Amazon", "Netflix", "Google"))
+
+faang$made_money <- ifelse(faang$"one_day_return" < 0, 0, 1)
+
+print(paste("Number of rows:", nrow(faang)))
+
+# Split train test dataset 
+train_split <- sample(1:nrow(faang),0.8 * nrow(faang))
+
+train_data<-faang%>%
+  slice(train_split)
+
+test_data<-faang %>%
+  slice(-train_split)
+
+faang_train_Y<-train_data %>%
+  pull(made_money)
+
+test_Y<-train_data %>%
+  pull(made_money)
+
+# Create a DFM of the train dataset 
+dfm_faang_train <-TMEF_dfm(train_data$tweet,ngrams=1:2) %>%
+  convert(to="matrix")
+
+faang_model<-cv.glmnet(x=dfm_faang_train,
+                             y=faang_train_Y)
+
+dfm_faang_test <-TMEF_dfm(test_data$tweet,
+                               ngrams=1:2,
+                               min.prop = 0) %>%
+  dfm_match(colnames(dfm_faang_train)) %>%
+  convert(to="matrix")
+
+faang_test_predict<-predict(faang_model,
+                                  newx = dfm_faang_test)[,1]
+
+test_predict_binary=ifelse(faang_test_predict>median(faang_test_predict),
+                           1,
+                           0) 
+# Accuracy 
+round(100*mean(test_predict_binary==test_Y),3)
+```
