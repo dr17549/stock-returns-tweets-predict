@@ -52,3 +52,35 @@ kendall_acc<-function(x,y,percentage=TRUE){
   if(percentage) report = report*100
   return(report)
 }
+
+
+custom_dfm <- function(text,
+                       ngrams = 1,
+                       stop.words = TRUE,
+                       custom_stop_words = NULL,
+                       min.prop = 0.01) {
+  
+  if (!is.character(text)) {  
+    stop("Must input character vector")
+  }
+  
+  drop_list <- ""
+  
+  if(stop.words) drop_list=stopwords("en") 
+  
+  if (!is.null(custom_stop_words)) {
+    drop_list <- c(drop_list, custom_stop_words)
+  }
+  print(drop_list)
+  text_data <- text %>%
+    replace_contraction() %>%
+    tokens(remove_numbers = TRUE,
+           remove_punct = TRUE) %>%
+    tokens_wordstem() %>%
+    tokens_select(pattern = drop_list, 
+                  selection = "remove") %>%
+    dfm() %>%
+    dfm_trim(min_docfreq = min.prop, docfreq_type = "prop")
+  
+  return(text_data)
+}

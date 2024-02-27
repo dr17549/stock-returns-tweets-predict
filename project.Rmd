@@ -20,6 +20,7 @@ source("TMEF_dfm.R")
 
 # Classifiers
 library(naivebayes)
+library(randomForest)
 ```
 
 
@@ -201,8 +202,12 @@ print(sd(summarized$avg))
 
 
 # Build a DFM for FAANG 
+Save and load the DFM as an RDS file 
 ```{r}
-DFM <- TMEF_dfm(faang$tweet,ngrams=1:2)
+# DFM <- TMEF_dfm(faang$tweet,ngrams=1:2)
+# saveRDS(DFM,file="dfm.RDS")
+# DFM<-readRDS("dfm.RDS")
+
 ```
 
 ```{r}
@@ -240,6 +245,9 @@ faang_small<-faang%>%
 
 faang_small$made_money <- ifelse(faang_small$"one_day_return" < 0, 0, 1)
 
+print(paste("Number of rows:", nrow(faang_small)))
+
+
 train_split <- sample(1:nrow(faang_small),10000)
 
 my_data_sample<-faang_small%>%
@@ -254,11 +262,16 @@ faang_train_Y<-my_data_sample %>%
 test_Y<-test_data %>%
   pull(made_money)
 
-dfm_faang_train_pros <-TMEF_dfm(my_data_sample$tweet,ngrams=1:2) %>%
+dfm_faang_train_pros <-custom_dfm(my_data_sample$tweet,
+                                  ngrams=1:2,
+                                  custom_stop_words = 
+                                    c("amazon","facebook","google")) %>%
   convert(to="matrix")
 
 faang_model_pros<-cv.glmnet(x=dfm_faang_train_pros,
                              y=faang_train_Y)
+
+
 
 ```
 
@@ -300,7 +313,26 @@ head(faang_test_predict_pros)
 
 # Accuracy 
 round(100*mean(faang_test_predict_pros==test_Y),3)
+```
 
+# Random Forest 
+!! does not work yet ? seems to be a problem with the emoji 
+```{r}
+# Change format of the dataset so it works with the naive bayes function 
+naive_bayes_train <- as.data.frame(cbind(dfm_faang_train_pros, faang_train_Y))
+naive_bayes_train$faang_train_Y <- as.factor(df_from_array$faang_train_Y)
+head(naive_bayes_train)
+faang_model_pros <- randomForest(faang_train_Y ~ ., data = naive_bayes_train)
+
+# Change format of the test dataset so it works with the naive bayes function 
+naive_bayes_test <- as.data.frame(cbind(dfm_faang_test_pros, test_Y))
+naive_bayes_test$faang_train_Y <- as.factor(df_from_array$faang_train_Y)
+
+faang_test_predict_pros<-predict(faang_model_pros,newdata = df_test)
+head(faang_test_predict_pros)
+
+# Accuracy 
+round(100*mean(faang_test_predict_pros==test_Y),3)
 ```
 
 

@@ -1,0 +1,147 @@
+```{r}
+library(quanteda)
+library(ggrepel)
+library(textclean)
+library(tidyverse)
+library(glmnet)
+library(pROC)
+library(knitr)
+library(dplyr)
+library(dtplyr)
+library(data.table)
+library(lubridate)
+library(xts)
+library(PerformanceAnalytics)
+library(knitr)
+library(kableExtra)
+library(dplyr)
+source("TMEF_dfm.R")
+
+# Classifiers
+library(naivebayes)
+library(randomForest)
+```
+
+# Pre-processing
+```{r}
+df <- fread("full_dataset-release.csv")
+df <- df %>%
+  rename(
+    tweet = TWEET,
+    stock = STOCK,
+    one_day_return ="1_DAY_RETURN", 
+    seven_day_return = "7_DAY_RETURN",
+    date = DATE
+  ) %>% 
+  mutate(date = as.Date(date, format = "%d/%m/%Y"))
+```
+
+# FAANG models (Up / Down)
+```{r}
+
+faang <- df %>%
+  filter(stock %in% c("Facebook", "Apple", "Amazon", "Netflix", "Google"))
+
+faang$made_money <- ifelse(faang$"one_day_return" < 0, 0, 1)
+
+print(paste("Number of rows:", nrow(faang)))
+
+# Split train test dataset 
+train_split <- sample(1:nrow(faang),0.8 * nrow(faang))
+
+train_data<-faang%>%
+  slice(train_split)
+
+test_data<-faang %>%
+  slice(-train_split)
+
+faang_train_Y<-train_data %>%
+  pull(made_money)
+
+test_Y<-train_data %>%
+  pull(made_money)
+
+# Create a DFM of the train dataset 
+# dfm_faang_train <-TMEF_dfm(train_data$tweet,ngrams=1:2) %>%
+#   convert(to="matrix")
+
+# Read DFM from RDS file instead 
+dfm_faang_train<-readRDS("dfm_faang_train.RDS")
+dfm_faang_test<-readRDS("dfm_faang_test.RDS")
+
+
+faang_model<-cv.glmnet(x=dfm_faang_train,
+                             y=faang_train_Y)
+
+# dfm_faang_test <-TMEF_dfm(test_data$tweet,
+#                                ngrams=1:2,
+#                                min.prop = 0) %>%
+#   dfm_match(colnames(dfm_faang_train)) %>%
+#   convert(to="matrix")
+
+faang_test_predict<-predict(faang_model,
+                                  newx = dfm_faang_test)[,1]
+
+test_predict_binary=ifelse(faang_test_predict>median(faang_test_predict),
+                           1,
+                           0) 
+
+# Save DFM into RDS file 
+# saveRDS(dfm_faang_train,file="dfm_faang_train.RDS")
+# saveRDS(dfm_faang_test,file="dfm_faang_test.RDS")
+
+# Accuracy 
+round(100*mean(test_predict_binary==test_Y),3)
+```
+
+# Facebook Model and accuracy (Up Down) 
+```{r}
+
+facebook <- faang %>%
+  filter(stock %in% c("Facebook"))
+
+print(paste("Number of rows:", nrow(facebook)))
+
+# Split train test dataset 
+train_split <- sample(1:nrow(facebook),0.8 * nrow(facebook))
+
+train_data<-facebook%>%
+  slice(train_split)
+
+test_data<-facebook %>%
+  slice(-train_split)
+
+faang_train_Y<-train_data %>%
+  pull(made_money)
+
+test_Y<-train_data %>%
+  pull(made_money)
+
+# Create a DFM of the train dataset 
+facebook_train <-TMEF_dfm(train_data$tweet,ngrams=1:2) %>%
+  convert(to="matrix")
+
+faang_model<-cv.glmnet(x=dfm_faang_train,
+                             y=faang_train_Y)
+
+facebook_test <-TMEF_dfm(test_data$tweet,
+                               ngrams=1:2,
+                               min.prop = 0) %>%
+  dfm_match(colnames(dfm_faang_train)) %>%
+  convert(to="matrix")
+
+facebook_test_predict <-predict(faang_model,
+                                  newx = dfm_faang_test)[,1]
+
+# dfm_faang_train<-readRDS("facebook_train.RDS")
+# dfm_faang_test<-readRDS("facebook_train.RDS")
+
+saveRDS(facebook_train,file="facebook_train.RDS")
+saveRDS(facebook_test,file="facebook_test.RDS")
+
+test_predict_binary=ifelse(facebook_test_predict>median(facebook_test_predict),
+                           1,
+                           0) 
+# Accuracy 
+round(100*mean(test_predict_binary==test_Y),3)
+```
