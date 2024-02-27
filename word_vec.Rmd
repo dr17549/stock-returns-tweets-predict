@@ -233,6 +233,12 @@ plotDat %>%
 
 # Applying Word Vector to Facebook data
 ```{r}
+
+# Read the word to vec file 
+# word vector 
+vecSmall<-readRDS("vecSmall.RDS")
+load("wfFile.RData")
+
 train_split <- sample(1:nrow(facebook),0.8 * nrow(facebook))
 
 train_data<-facebook%>%
@@ -241,17 +247,13 @@ train_data<-facebook%>%
 test_data<-facebook %>%
   slice(-train_split)
 
-# word vector 
-vecSmall<-readRDS("vecSmall.RDS")
-load("wfFile.RData")
+# # project data onto the word vector
+# vdat<-vecCheck(facebook$tweet,
+#                vecSmall,
+#                wfFile,
+#                PCAtrim=1)
 
-# project data onto the word vector
-vdat<-vecCheck(facebook$tweet,
-               vecSmall,
-               wfFile,
-               PCAtrim=1)
-
-vdat_test <- readRDS("facebook_vdat.RDS")
+vdat <- readRDS("facebook_vdat.RDS")
 
 # head(vdat)
 # saveRDS(vdat,file="facebook_vdat.RDS")
