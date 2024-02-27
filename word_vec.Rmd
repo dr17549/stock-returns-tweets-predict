@@ -15,7 +15,13 @@ library(PerformanceAnalytics)
 library(knitr)
 library(kableExtra)
 library(dplyr)
+library(sentimentr)
+library(doc2concrete)
+
+# r source files 
 source("TMEF_dfm.R")
+source("vectorFunctions.R") # a new one!
+
 
 # Classifiers
 library(naivebayes)
@@ -144,4 +150,18 @@ test_predict_binary=ifelse(facebook_test_predict>median(facebook_test_predict),
                            0) 
 # Accuracy 
 round(100*mean(test_predict_binary==test_Y),3)
+```
+
+```{r}
+
+# word vector 
+vecSmall<-readRDS("vecSmall.RDS")
+load("wfFile.RData")
+
+# project data onto the word vector
+vdat<-vecCheck(facebook$tweet,
+               vecSmall,
+               wfFile,
+               PCAtrim=1)
+
 ```
