@@ -1,0 +1,23 @@
+```{r}
+# install.packages("httr")
+# install.packages("jsonlite")
+# install.packages("dplyr")
+
+
+require(httr)
+require(jsonlite)
+require(dplyr)
+
+Sys.setenv(BEARER_TOKEN = "AAAAAAAAAAAAAAAAAAAAAAtBsgEAAAAAMZM2d5MyxI86RUKdzNE78ygdmKg%3DLVu74YsL11ayl2Ujsr4Pcje8fSt6Pm4ImG0I6pk9ZHSm82YqPu")
+
+bearer_token <- Sys.getenv("$BEARER_TOKEN")
+headers <- c(`Authorization` = sprintf('Bearer %s', bearer_token))
+
+params <- list(`user.fields` = 'description',
+               `expansions` = 'pinned_tweet_id')
+
+handle <- readline('@Apple')
+url_handle <-
+  sprintf('https://api.twitter.com/2/users/by?usernames=%s', handle)
+
+```

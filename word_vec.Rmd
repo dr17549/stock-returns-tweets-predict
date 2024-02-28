@@ -144,7 +144,7 @@ plotDat %>%
 ```{r}
 
 facebook <- faang %>%
-  filter(stock %in% c("Facebook"))
+  filter(stock %in% c("Amazon"))
 
 print(paste("Number of rows:", nrow(facebook)))
 
