@@ -43,15 +43,34 @@ df <- df %>%
   mutate(date = as.Date(date, format = "%d/%m/%Y"))
 ```
 
-# FAANG models (Up / Down)
 ```{r}
+# remove NAs
+rows_with_null <- sum(!complete.cases(df))
+df <- na.omit(df)
+#Some other data pre-processing: 
+# df$tweet <- replace_url(df$tweet)
+# df_emoji_text <- df
+# # df_emoji_identifier <- df
+# df_emoji_text$tweet <- replace_emoji(df$tweet)
+# df_emoji_identifier$tweet<- replace_emoji(df$tweet) 
+```
+
+# FANG Preprocessing 
+```{r}
+custom_stop <- c('amazon','Facebook', '@amazon', 'netflix', '@netflix', 'apple', '@apple', 'facebook', '@facebook', 'google', '@google', 'rt','RT','Rt')
 
 faang <- df %>%
   filter(stock %in% c("Facebook", "Apple", "Amazon", "Netflix", "Google"))
+faang$tweet <- replace_emoji(faang$tweet)
+faang$tweet <- replace_url(faang$tweet)
 
 faang$made_money <- ifelse(faang$"one_day_return" < 0, 0, 1)
 
-print(paste("Number of rows:", nrow(faang)))
+```
+
+
+# FAANG models (Up / Down)
+```{r}
 
 # Split train test dataset 
 train_split <- sample(1:nrow(faang),0.8 * nrow(faang))
@@ -71,7 +90,7 @@ test_Y <-test_X %>%
   pull(made_money)
 
 # Create a DFM of the train dataset 
-dfm_train <-TMEF_dfm(train_X$tweet,ngrams=1:2) %>%
+dfm_train <-TMEF_dfm(train_X$tweet,ngrams=1:2,custom_stop_words = custom_stop) %>%
   convert(to="matrix")
 
 # Read DFM from RDS file instead 
@@ -83,9 +102,14 @@ faang_model<-cv.glmnet(x=dfm_train,
 
 dfm_test <-TMEF_dfm(test_X$tweet,
                                ngrams=1:2,
-                               min.prop = 0) %>%
+                               min.prop = 0,
+                    custom_stop_words = custom_stop) %>%
   dfm_match(colnames(dfm_train)) %>%
   convert(to="matrix")
+
+# # Save DFM into RDS file 
+# saveRDS(dfm_train,file="dfm_faang_train.RDS")
+# saveRDS(dfm_test,file="dfm_faang_test.RDS")/
 
 test_predict <- predict(faang_model,
                                   newx = dfm_test)[,1]
@@ -94,11 +118,7 @@ test_predict_binary=ifelse(test_predict > 0.5,
                            1,
                            0)
 
-kendall_acc(test_predict,test_Y)
-
-# Save DFM into RDS file 
-# saveRDS(dfm_faang_train,file="dfm_faang_train.RDS")
-# saveRDS(dfm_faang_test,file="dfm_faang_test.RDS")
+kendall_acc(test_predict_binary,test_Y)
 
 # Accuracy 
 round(100*mean(test_predict_binary==test_Y),3)
@@ -114,8 +134,8 @@ plotCoefs<-faang_model %>%
 
 # merge frequencies
 plotDat<-plotCoefs %>%
-  left_join(data.frame(ngram=colnames(facebook_test),
-                       freq=colMeans(facebook_test))) %>%
+  left_join(data.frame(ngram=colnames(dfm_test),
+                       freq=colMeans(dfm_test))) %>%
   mutate_at(vars(score,freq),~round(.,3))
 
 # pipe into ggplot
@@ -239,21 +259,21 @@ plotDat %>%
 vecSmall<-readRDS("vecSmall.RDS")
 load("wfFile.RData")
 
-train_split <- sample(1:nrow(facebook),0.8 * nrow(facebook))
+train_split <- sample(1:nrow(faang),0.8 * nrow(faang))
 
-train_data<-facebook%>%
+train_data<-faang%>%
   slice(train_split)
 
-test_data<-facebook %>%
+test_data<-faang %>%
   slice(-train_split)
 
 # # project data onto the word vector
-# vdat<-vecCheck(facebook$tweet,
-#                vecSmall,
-#                wfFile,
-#                PCAtrim=1)
+vdat<-vecCheck(faang$tweet,
+               vecSmall,
+               wfFile,
+               PCAtrim=1)
 
-vdat <- readRDS("facebook_vdat.RDS")
+vdat <- readRDS("faang_vdat.RDS")
 
 # head(vdat)
 # saveRDS(vdat,file="facebook_vdat.RDS")
