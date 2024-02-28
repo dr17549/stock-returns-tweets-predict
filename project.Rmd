@@ -68,9 +68,10 @@ lexicon::hash_sentiment_emoji for use in the sentimentr package.
 
 
 ```{r}
-df_emoji_text <- replace_emoji(df$tweet)
-
-df_emoji_identifier <- replace_emoji(df$tweet) 
+df_emoji_text <- df
+df_emoji_identifier <- df
+df_emoji_text$tweet <- replace_emoji(df$tweet)
+df_emoji_identifier$tweet<- replace_emoji(df$tweet) 
 ```
 
 
@@ -183,7 +184,7 @@ Since all the FAANGs have positive sentiment, training on FAANG might not yield 
 Let's Zoom into FAANG: 
 ```{r}
 
-faang <- df %>%
+faang <- df_emoji_text %>%
   filter(stock %in% c("Facebook", "Apple", "Amazon", "Netflix", "Google"))
 
 ```
