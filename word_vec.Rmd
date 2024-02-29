@@ -58,12 +58,17 @@ rows_with_null <- sum(!complete.cases(df))
 df <- na.omit(df)
 
 # remove the URLs and replace emojis and html tags 
-df$tweet <- replace_emoji(df$tweet) %>% 
-  replace_url(non_faang$tweet) %>% 
-  replace_html(non_faang$tweet)
+df$tweet <- replace_emoji(df$tweet) 
+df$tweet <- replace_url(df$tweet)  
+df$tweet <- replace_html(df$tweet)  
+
 
 # add a new variable that indicates if it's an up or down 
 df$made_money <- ifelse(df$"one_day_return" < 0, 0, 1)
+
+# df<-readRDS("df.RDS")
+saveRDS(df,file="df.RDS")
+
 ```
 
 # FANG Preprocessing 
@@ -81,6 +86,7 @@ non_faang <- df %>%
 # head(filtered_data$tweet)
 
 ```
+
 
 
 # FAANG models (Up / Down)
@@ -123,16 +129,9 @@ dfm_test <-TMEF_dfm(test_X$tweet,
   dfm_match(colnames(dfm_train)) %>%
   convert(to="matrix")
 
-dfm_non_faang <-TMEF_dfm(non_faang$tweet,
-                               ngrams=1:2,
-                               min.prop = 0,
-                    custom_stop_words = custom_stop) %>%
-  dfm_match(colnames(dfm_train)) %>%
-  convert(to="matrix")
-
 # # Save DFM into RDS file 
 # saveRDS(dfm_train,file="dfm_faang_train.RDS")
-# saveRDS(dfm_test,file="dfm_faang_test.RDS")/ 
+# saveRDS(dfm_test,file="dfm_faang_test.RDS")
 
 test_predict <- predict(faang_model,
                                   newx = dfm_test)[,1]
@@ -184,6 +183,20 @@ plotDat %>%
         axis.text=element_text(size=16))
 
 ```
+
+
+# Benchmark Model with random model 
+
+```{r}
+
+test_X <- test_X %>%
+  mutate(text_wdct=str_count(tweet,"[[:alpha:]]+"),
+         model_random=sample(test_predict))
+
+kendall_acc(test_Y,test_X$model_random)
+
+```
+
 
 # Testing FAANG model on non-FAANG companies 
 ```{r}
