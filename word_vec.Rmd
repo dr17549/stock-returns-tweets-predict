@@ -184,6 +184,24 @@ plotDat %>%
 
 ```
 
+```{r}
+plot(test_predict)
+combined_df <- cbind(test_X, test_predict, test_Y)
+filtered_data <- combined_df[str_detect(combined_df$tweet, "updat"), ]
+head(filtered_data[, c('tweet', 'test_predict','test_Y')])
+
+hist(train_Y, main = 'Histogram of Outcomes', xlab = 'Values', ylab = 'Frequency', col = 'lightblue', border = 'black')
+
+ggplot(test_X, aes(x = made_money)) +
+  geom_bar(fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Outcomes",
+       x = "Value",
+       y = "Frequency") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+
 
 # Benchmark Model with random model 
 
@@ -248,6 +266,7 @@ train_Y<-train_X %>%
 
 test_Y<-test_X %>%
   pull(made_money)
+
 
 # Create a DFM of the train dataset 
 facebook_train <-TMEF_dfm(train_X$tweet,ngrams=1:2) %>%
@@ -317,7 +336,7 @@ plotDat %>%
 
 ```
 
-# Applying Word Vector to Facebook data
+# Applying Word Vector to FAANG data
 ```{r}
 
 # Read the word to vec file 
@@ -333,7 +352,7 @@ train_data<-faang%>%
 test_data<-faang %>%
   slice(-train_split)
 
-vdat <- readRDS("facebook_vdat.RDS")
+vdat <- readRDS("faang_vat.RDS")
 
 
 # # project data onto the word vector
@@ -366,13 +385,57 @@ kendall_acc(test_all_predict,test_data$made_money)
 test_vec_predict<-predict(lasso_vec,newx = vdat_test,
                           s="lambda.min")
 
+
+test_predict_binary=ifelse(test_vec_predict>0.5,
+                           1,
+                           0) 
+
 kendall_acc(test_vec_predict,test_data$made_money)
+table(test_predict_binary,test_data$made_money)
+
+round(100*mean(test_predict_binary==test_data$made_money),3)
+
+```
+
+# Combine N-gram with 
+```{r}
+
+dfm_train <-TMEF_dfm(train_X$tweet,ngrams=1:2,custom_stop_words = custom_stop) %>%
+  convert(to="matrix")
+
+dfm_test <-TMEF_dfm(test_X$tweet,
+                               ngrams=1:2,
+                               min.prop = 0,
+                    custom_stop_words = custom_stop) %>%
+  dfm_match(colnames(dfm_train)) %>%
+  convert(to="matrix")
+
+
+combined_x_train=cbind(vdat_train,dfm_train)
+combined_x_test=cbind(vdat_test,dfm_test)
+
+lasso_vec<-glmnet::cv.glmnet(x=combined_x_train,
+                             y=train_data$made_money)
+
+# this is how you use the minimum one - usually it produces better accuracy
+test_vec_predict<-predict(lasso_vec,newx = combined_x_test,
+                          s="lambda.min")
+
+
+test_predict_binary=ifelse(test_vec_predict>0.5,
+                           1,
+                           0) 
+
+kendall_acc(test_vec_predict,test_data$made_money)
+table(test_predict_binary,test_data$made_money)
+
+round(100*mean(test_predict_binary==test_data$made_money),3)
 
 ```
 
 
 # Applying sentiment 
-
+# positive 
 ```{r}
 train_split <- sample(1:nrow(faang),0.8 * nrow(faang))
 
@@ -382,15 +445,19 @@ train_data<-faang%>%
 test_data<-faang %>%
   slice(-train_split)
 
+# pull the positive dictionary
 positive_dict<-textdata::lexicon_loughran() %>%
   filter(sentiment=="positive") %>%
   pull(word) %>%
   paste(collapse=" ")
 
+
 pos_dict<-list(uc=textdata::lexicon_loughran() %>%
                  filter(sentiment=="positive") %>%
                  pull(word)) %>%
   dictionary()
+head(pos_dict)
+
 
 test_data$speech_wdct <- test_data$tweet %>%
   tokens() %>%
@@ -414,6 +481,7 @@ pos_sims <- readRDS("pos_sims.rds")
 
 #saveRDS(pos_sims, "pos_sims.rds")
 ```
+
 # Calculate kendall accuracy using positive sentiment 
 ```{r}
 
@@ -426,6 +494,7 @@ acc_posbow<-kendall_acc(test_data$made_money,pos_dict_bow)
 acc_posbow
 ```
 
+# Uncertainty in economics 
 ```{r}
 uncertain_dict<-textdata::lexicon_loughran() %>%
   filter(sentiment=="uncertainty") %>%
