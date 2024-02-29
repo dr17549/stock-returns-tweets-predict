@@ -109,7 +109,7 @@ dfm_test <-TMEF_dfm(test_X$tweet,
 
 # # Save DFM into RDS file 
 # saveRDS(dfm_train,file="dfm_faang_train.RDS")
-# saveRDS(dfm_test,file="dfm_faang_test.RDS")/
+# saveRDS(dfm_test,file="dfm_faang_test.RDS")/ 
 
 test_predict <- predict(faang_model,
                                   newx = dfm_test)[,1]
@@ -273,9 +273,9 @@ vdat<-vecCheck(faang$tweet,
                wfFile,
                PCAtrim=1)
 
-vdat <- readRDS("faang_vdat.RDS")
+saveRDS(vdat,file="faang_vat.RDS")
 
-# head(vdat)
+# vdat <- readRDS("faang_vdat.RDS")
 # saveRDS(vdat,file="facebook_vdat.RDS")
 
 vdat_train<-vdat[train_split,]
@@ -298,5 +298,5 @@ test_vec_predict<-predict(lasso_vec,newx = vdat_test,
                           s="lambda.min")
 
 kendall_acc(test_vec_predict,test_data$made_money)
-
+56.43
 ```
