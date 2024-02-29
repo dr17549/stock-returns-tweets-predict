@@ -17,7 +17,9 @@ library(knitr)
 library(kableExtra)
 library(dplyr)
 library(stm)
+library(ROSE)
 source("TMEF_dfm.R")
+
 
 # Classifiers
 library(naivebayes)
@@ -28,6 +30,9 @@ library(naivebayes)
 ```{r}
 df <- fread("full_dataset-release.csv")
 ```
+
+
+
 
 ```{r}
 #renaming columns
@@ -43,6 +48,17 @@ df <- df %>%
 df <- df %>%
   mutate(date = as.Date(date, format = "%d/%m/%Y"))
 
+```
+
+```{r}
+industries <- read_csv("industries.csv")
+
+```
+```{r}
+merged_df <- merge(df, industries, by = "stock", all.x = TRUE)
+
+# View the merged data frame
+head(merged_df)
 ```
 
 
@@ -76,7 +92,7 @@ df_emoji_identifier$tweet<- replace_emoji(df$tweet)
 
 
 ```{r}
-replaced_text <- replace_emoji("hello 😠")
+custom_stop <- c('amazon','Facebook', '@amazon', 'netflix', '@netflix', 'apple', '@apple', 'facebook', '@facebook', 'google', '@google', 'rt','RT','Rt')
 ```
 
 
@@ -346,14 +362,32 @@ labelTopics(amazon_topicMod7)
 
 custom_stop <- c('amazon','Facebook', '@amazon', 'netflix', '@netflix', 'apple', '@apple', 'facebook', '@facebook', 'google', '@google', 'rt','RT','Rt')
 
-faang$made_money <- ifelse(faang$"one_day_return" < 0, 0, 1)
+table(faang$made_money)
 
-train_split <- sample(1:nrow(faang),0.8*nrow(faang))
+# Calculate the number of samples in the minority class
+n_minority <- sum(faang$made_money == "0")
 
-faang_train_data<-faang%>%
+# Create a formula with 'made_money' as the response variable
+formula <- as.formula("made_money ~ V1 + tweet + stock + date + LAST_PRICE + one_day_return")
+
+# Undersample the majority class to have the same number of samples as the minority class
+undersampled_faang <- ovun.sample(formula, data = faang, method = "under")$data
+
+
+
+# Check the class distribution after undersampling
+table(undersampled_faang$made_money)
+```
+
+
+#Undersampled N-grams daily
+```{r}
+train_split <- sample(1:nrow(undersampled_faang),0.8*nrow(undersampled_faang))
+
+faang_train_data<-undersampled_faang%>%
   slice(train_split)
 
-faang_test_data<-faang %>%
+faang_test_data<-undersampled_faang %>%
   slice(-train_split)
 
 faang_train_Y<-faang_train_data %>%
@@ -368,9 +402,7 @@ dfm_faang_train_no_company_name<-TMEF_dfm(faang_train_data$tweet,ngrams=1:2, cus
 faang_model_pros<-cv.glmnet(x=dfm_faang_train_no_company_name,
                              y=faang_train_Y)
 
-```
 
-```{r}
 dfm_faang_test_no_company_name<-TMEF_dfm(faang_test_data$tweet,
                                ngrams=1:2,
                                min.prop = 0, custom_stop_words = custom_stop) %>%
@@ -386,10 +418,7 @@ head(faang_test_predict_pros)
 
 
 test_predict_binary <-  ifelse( faang_test_predict_pros< 0.5, 0, 1)
-```
 
-
-```{r}
 round(100*mean(test_predict_binary==test_Y),3)
 
 conf_matrix <- table(Actual = test_Y, Predicted = test_predict_binary)
@@ -397,7 +426,133 @@ conf_matrix <- table(Actual = test_Y, Predicted = test_predict_binary)
 conf_matrix
 
 
+TP <- sum(test_predict_binary == 1 & test_Y == 1)
+FP <- sum(test_predict_binary == 1 & test_Y == 0)
+FN <- sum(test_predict_binary == 0 & test_Y == 1)
+
+# Calculate Precision and Recall
+precision <- TP / (TP + FP)
+recall <- TP / (TP + FN)
+
+precision
+recall
+
 ```
+
+
+
+
+#Regular N-grams daily
+```{r}
+train_split <- sample(1:nrow(meged_df),0.8*nrow(meged_df))
+
+faang_train_data<-meged_df%>%
+  slice(train_split)
+
+faang_test_data<- meged_df %>%
+  slice(-train_split)
+
+faang_train_Y<-faang_train_data %>%
+  pull(made_money)
+
+test_Y<-faang_test_data %>%
+  pull(made_money)
+
+dfm_faang_train_no_company_name<-TMEF_dfm(faang_train_data$tweet,ngrams=1:2, custom_stop_words = custom_stop) %>%
+  convert(to="matrix")
+
+faang_model_pros<-cv.glmnet(x=dfm_faang_train_no_company_name,
+                             y=faang_train_Y)
+
+
+dfm_faang_test_no_company_name<-TMEF_dfm(faang_test_data$tweet,
+                               ngrams=1:2,
+                               min.prop = 0, custom_stop_words = custom_stop) %>%
+  dfm_match(colnames(dfm_faang_train_no_company_name)) %>%
+  convert(to="matrix")
+
+faang_test_predict_pros<-predict(faang_model_pros,
+                                  newx = dfm_faang_test_no_company_name)[,1]
+
+hist(test_Y)
+
+head(faang_test_predict_pros)
+```
+
+
+```{r}
+test_predict_binary <-  ifelse( faang_test_predict_pros< 0.46, 0, 1)
+
+round(100*mean(test_predict_binary==test_Y),3)
+
+conf_matrix <- table(Actual = test_Y, Predicted = test_predict_binary)
+
+conf_matrix
+
+
+TP <- sum(test_predict_binary == 1 & test_Y == 1)
+FP <- sum(test_predict_binary == 1 & test_Y == 0)
+FN <- sum(test_predict_binary == 0 & test_Y == 1)
+
+# Calculate Precision and Recall
+precision <- TP / (TP + FP)
+recall <- TP / (TP + FN)
+
+precision
+recall
+```
+
+
+
+
+```{r}
+faang$made_money <- ifelse(faang$"one_day_return" < 0, 0, 1)
+table_data <- table(faang$made_money)
+percentages <- round((table_data / sum(table_data)) * 100, 2)
+
+# Create bar plot with percentages
+barplot(percentages,
+        main = "Distribution of 'made_money'",
+        xlab = "Value",
+        ylab = "Percentage",
+        col = "skyblue",
+        ylim = c(0, 100),
+        names.arg = c("Zero", "One"),
+        beside = TRUE)
+```
+
+
+
+```{r}
+
+calculate_accuracy <- function(threshold, predicted_probs, actual_labels) {
+  predicted_labels <- ifelse(predicted_probs >= threshold, 1, 0)
+  accuracy <- mean(predicted_labels == actual_labels)
+  return(accuracy)
+}
+
+# Define a range of thresholds
+thresholds <- seq(0, 1, by = 0.001)
+
+# Calculate accuracy for each threshold
+accuracies <- sapply(thresholds, function(threshold) {
+  calculate_accuracy(threshold, faang_test_predict_pros, test_Y)
+})
+
+optimal_threshold <- thresholds[which.max(accuracies)]
+max_accuracy <- max(accuracies)
+
+# Plot accuracy against threshold
+plot(thresholds, accuracies, type = "l", 
+     xlab = "Threshold", ylab = "Accuracy",
+     main = "Accuracy vs. Threshold")
+abline(v = optimal_threshold, col = "red", lty = 2)
+
+
+```
+
+
+
 ```{r}
 # lots of zeros
 faang_model_pros %>%
@@ -501,6 +656,98 @@ kendalls_acc
 ```
 
 
+#Daily Aggregations
+
+```{r}
+daily_aggregated <- df %>%
+  group_by(day_date = lubridate::floor_date(date, unit = "day"), stock) %>%
+  summarize(
+    aggregated_tweets = paste(tweet, collapse = " "),
+    one_day_return = first(one_day_return),
+    num_tweets = n(),
+    .groups = "drop_last"
+  ) %>%
+  ungroup()
+
+
+daily_aggregated$made_money <- ifelse(daily_aggregated$one_day_return < 0, 0, 1)
+
+class_counts <- table(daily_aggregated$made_money)
+
+# Find the size of the minority class
+minority_size <- min(class_counts)
+
+# Undersample the majority class to match the size of the minority class
+undersampled_daily <- daily_aggregated %>%
+  group_by(made_money) %>%
+  sample_n(minority_size) %>%
+  ungroup()
+
+# Check the class distribution after undersampling
+table(undersampled_daily$made_money)
+
+train_split <- sample(1:nrow(undersampled_daily),0.8*nrow(undersampled_daily))
+
+daily_aggregated_train <-undersampled_daily %>%
+  slice(train_split)
+
+daily_aggregated_test <-undersampled_daily %>%
+  slice(-train_split)
+
+train_Y<-daily_aggregated_train %>%
+  pull(made_money)
+
+test_Y<-daily_aggregated_test %>%
+  pull(made_money)
+
+dfm_daily_aggregated<-TMEF_dfm(daily_aggregated_train$aggregated_tweets,ngrams=1:2) %>%
+  convert(to="matrix")
+
+
+```
+```{r}
+daily_aggregated_model<-cv.glmnet(x=dfm_daily_aggregated,
+                             y=train_Y)
+
+
+
+```
+```{r}
+dfm_daily_aggregated_test<-TMEF_dfm(daily_aggregated_test$aggregated_tweets,
+                               ngrams=1:2,
+                               min.prop = 0) %>%
+  dfm_match(colnames(dfm_daily_aggregated)) %>%
+  convert(to="matrix")
+
+test_predictions <-predict(daily_aggregated_model,
+                                  newx = dfm_daily_aggregated_test)[,1]
+```
+
+```{r}
+
+test_predict_binary <-  ifelse(test_predictions < 0.5, 0, 1)
+round(100*mean(test_predict_binary==test_Y),3)
+
+conf_matrix <- table(Actual = test_Y, Predicted = test_predict_binary)
+
+conf_matrix
+
+
+TP <- sum(test_predict_binary == 1 & test_Y == 1)
+FP <- sum(test_predict_binary == 1 & test_Y == 0)
+FN <- sum(test_predict_binary == 0 & test_Y == 1)
+
+# Calculate Precision and Recall
+precision <- TP / (TP + FP)
+recall <- TP / (TP + FN)
+
+precision
+recall
+```
+
+
+
+
 # N-grams weekly
 ```{r}
 weekly_aggregated_faang <- faang %>%
@@ -573,9 +820,27 @@ conf_matrix <- table(Actual = test_Y_weekly, Predicted = test_predict_binary)
 ```{r}
 test_predict_binary
 ```
+#by sentiment 
 
 ```{r}
-weekly_aggregated_whole <- df_emoji_text %>%
+result <- df %>%
+  group_by(stock, date) %>%
+  summarize(one_day_return = first(one_day_return), avg_sentiment = mean(LSTM_POLARITY) , .groups = "drop") %>%
+  ungroup()
+```
+
+```{r}
+x <- as.data.frame(result$avg_sentiment)
+
+# Store the response variable in y
+y <- result$one_day_return
+
+# Perform cross-validated elastic net regression
+sentiment_model <- cv.glmnet(x = x, y = y)
+```
+
+```{r}
+weekly_aggregated_whole <- df %>%
   group_by(week_start_date = lubridate::floor_date(date, unit = "week"), stock) %>%
   summarize(
     aggregated_tweets = paste(tweet, collapse = " "),
@@ -596,16 +861,45 @@ train_data_weekly<-weekly_aggregated_whole %>%
 test_data_weekly<-weekly_aggregated_whole %>%
   slice(-train_split)
 
+
+dfm_train_weekly<-TMEF_dfm(train_data_weekly$aggregated_tweets,ngrams=1:2) %>%
+                  convert(to="matrix")
+
+```
+
+
+```{r}
 train_Y_whole<-train_data_weekly %>%
   pull(made_money)
 
 test_Y_weekly<-test_data_weekly %>%
   pull(made_money)
 
-dfm_train_weekly<-TMEF_dfm(train_data_weekly$aggregated_tweets,ngrams=1:2) %>%
+whole_model_weekly <-cv.glmnet(x=dfm_train_weekly,
+                             y=train_Y_whole)
+
+dfm_test_weekly<-TMEF_dfm(test_data_weekly$aggregated_tweets,
+                               ngrams=1:2,
+                               min.prop = 0) %>%
+  dfm_match(colnames(dfm_train_weekly)) %>%
   convert(to="matrix")
+
+
+
+
 ```
 
+
+```{r}
+whole_test_predict_weekly<-predict(whole_model_weekly,
+                                  newx = dfm_test_weekly)[,1]
+
+test_predict_binary <-  ifelse(whole_test_predict_weekly < 0.5, 0, 1)
+
+round(100*mean(test_predict_binary==test_Y_weekly),3)
+
+conf_matrix <- table(Actual = test_Y_weekly, Predicted = test_predict_binary)
+```
 
 
 
