@@ -17,6 +17,10 @@ library(kableExtra)
 library(dplyr)
 library(sentimentr)
 library(doc2concrete)
+library(textclean)
+
+install.packages("stringr")
+library(stringr)
 
 # undersampling 
 library(caret)
@@ -46,16 +50,25 @@ df <- df %>%
   mutate(date = as.Date(date, format = "%d/%m/%Y"))
 ```
 
+#Text Preprocessing for the tweets 
+
 ```{r}
 # remove NAs
 rows_with_null <- sum(!complete.cases(df))
 df <- na.omit(df)
-#Some other data pre-processing: 
-# df$tweet <- replace_url(df$tweet)
-# df_emoji_text <- df
-# # df_emoji_identifier <- df
-# df_emoji_text$tweet <- replace_emoji(df$tweet)
-# df_emoji_identifier$tweet<- replace_emoji(df$tweet) 
+
+# remove the URLs and replace emojis and html tags 
+df$tweet <- replace_emoji(df$tweet) 
+df$tweet <- replace_url(df$tweet)  
+df$tweet <- replace_html(df$tweet)  
+
+
+# add a new variable that indicates if it's an up or down 
+df$made_money <- ifelse(df$"one_day_return" < 0, 0, 1)
+
+# df<-readRDS("df.RDS")
+saveRDS(df,file="df.RDS")
+
 ```
 
 # FANG Preprocessing 
@@ -64,12 +77,16 @@ custom_stop <- c('amazon','Facebook', '@amazon', 'netflix', '@netflix', 'apple',
 
 faang <- df %>%
   filter(stock %in% c("Facebook", "Apple", "Amazon", "Netflix", "Google"))
-faang$tweet <- replace_emoji(faang$tweet)
-faang$tweet <- replace_url(faang$tweet)
 
-faang$made_money <- ifelse(faang$"one_day_return" < 0, 0, 1)
+non_faang <- df %>%
+  filter(!(stock %in% c("Facebook", "Apple", "Amazon", "Netflix", "Google")))
+
+# To print out if any tweets has a substring xxxx 
+# filtered_data <- faang[str_detect(faang$tweet, "tear"), ]
+# head(filtered_data$tweet)
 
 ```
+
 
 
 # FAANG models (Up / Down)
@@ -96,6 +113,8 @@ test_Y <-test_X %>%
 dfm_train <-TMEF_dfm(train_X$tweet,ngrams=1:2,custom_stop_words = custom_stop) %>%
   convert(to="matrix")
 
+head(test_Y)
+
 # Read DFM from RDS file instead 
 # dfm_faang_train<-readRDS("dfm_faang_train.RDS")
 # dfm_faang_test<-readRDS("dfm_faang_test.RDS")
@@ -112,7 +131,7 @@ dfm_test <-TMEF_dfm(test_X$tweet,
 
 # # Save DFM into RDS file 
 # saveRDS(dfm_train,file="dfm_faang_train.RDS")
-# saveRDS(dfm_test,file="dfm_faang_test.RDS")/ 
+# saveRDS(dfm_test,file="dfm_faang_test.RDS")
 
 test_predict <- predict(faang_model,
                                   newx = dfm_test)[,1]
@@ -120,6 +139,8 @@ test_predict <- predict(faang_model,
 test_predict_binary=ifelse(test_predict > 0.5,
                            1,
                            0)
+table(test_predict_binary,test_Y)
+
 
 kendall_acc(test_predict_binary,test_Y)
 
@@ -163,11 +184,71 @@ plotDat %>%
 
 ```
 
+```{r}
+plot(test_predict)
+combined_df <- cbind(test_X, test_predict, test_Y)
+filtered_data <- combined_df[str_detect(combined_df$tweet, "updat"), ]
+head(filtered_data[, c('tweet', 'test_predict','test_Y')])
+
+hist(train_Y, main = 'Histogram of Outcomes', xlab = 'Values', ylab = 'Frequency', col = 'lightblue', border = 'black')
+
+ggplot(test_X, aes(x = made_money)) +
+  geom_bar(fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Outcomes",
+       x = "Value",
+       y = "Frequency") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+
+
+# Benchmark Model with random model 
+
+```{r}
+
+test_X <- test_X %>%
+  mutate(text_wdct=str_count(tweet,"[[:alpha:]]+"),
+         model_random=sample(test_predict))
+
+kendall_acc(test_Y,test_X$model_random)
+
+```
+
+
+# Testing FAANG model on non-FAANG companies 
+```{r}
+
+dfm_non_faang <-TMEF_dfm(non_faang$tweet,
+                               ngrams=1:2,
+                               min.prop = 0,
+                    custom_stop_words = custom_stop) %>%
+  dfm_match(colnames(dfm_train)) %>%
+  convert(to="matrix")
+
+test_predict <- predict(faang_model,
+                                  newx = dfm_non_faang)[,1]
+
+test_predict_binary=ifelse(test_predict > 0.5,
+                           1,
+                           0)
+
+kendall_acc(test_predict_binary,test_Y)
+
+# Accuracy 
+round(100*mean(test_predict_binary==non_faang$made_money),3)
+# Confusion Matrix 
+table(test_predict_binary,non_faang$made_money)
+
+
+```
+
+
 # Facebook Model and accuracy (Up Down) 
 ```{r}
 
 facebook <- faang %>%
-  filter(stock %in% c("Amazon"))
+  filter(stock %in% c("Facebook"))
 
 print(paste("Number of rows:", nrow(facebook)))
 
@@ -185,6 +266,7 @@ train_Y<-train_X %>%
 
 test_Y<-test_X %>%
   pull(made_money)
+
 
 # Create a DFM of the train dataset 
 facebook_train <-TMEF_dfm(train_X$tweet,ngrams=1:2) %>%
@@ -254,7 +336,7 @@ plotDat %>%
 
 ```
 
-# Applying Word Vector to Facebook data
+# Applying Word Vector to FAANG data
 ```{r}
 
 # Read the word to vec file 
@@ -270,7 +352,7 @@ train_data<-faang%>%
 test_data<-faang %>%
   slice(-train_split)
 
-vdat <- readRDS("facebook_vdat.RDS")
+vdat <- readRDS("faang_vat.RDS")
 
 
 # # project data onto the word vector
@@ -303,10 +385,57 @@ kendall_acc(test_all_predict,test_data$made_money)
 test_vec_predict<-predict(lasso_vec,newx = vdat_test,
                           s="lambda.min")
 
+
+test_predict_binary=ifelse(test_vec_predict>0.5,
+                           1,
+                           0) 
+
 kendall_acc(test_vec_predict,test_data$made_money)
+table(test_predict_binary,test_data$made_money)
+
+round(100*mean(test_predict_binary==test_data$made_money),3)
 
 ```
 
+# Combine N-gram with 
+```{r}
+
+dfm_train <-TMEF_dfm(train_X$tweet,ngrams=1:2,custom_stop_words = custom_stop) %>%
+  convert(to="matrix")
+
+dfm_test <-TMEF_dfm(test_X$tweet,
+                               ngrams=1:2,
+                               min.prop = 0,
+                    custom_stop_words = custom_stop) %>%
+  dfm_match(colnames(dfm_train)) %>%
+  convert(to="matrix")
+
+
+combined_x_train=cbind(vdat_train,dfm_train)
+combined_x_test=cbind(vdat_test,dfm_test)
+
+lasso_vec<-glmnet::cv.glmnet(x=combined_x_train,
+                             y=train_data$made_money)
+
+# this is how you use the minimum one - usually it produces better accuracy
+test_vec_predict<-predict(lasso_vec,newx = combined_x_test,
+                          s="lambda.min")
+
+
+test_predict_binary=ifelse(test_vec_predict>0.5,
+                           1,
+                           0) 
+
+kendall_acc(test_vec_predict,test_data$made_money)
+table(test_predict_binary,test_data$made_money)
+
+round(100*mean(test_predict_binary==test_data$made_money),3)
+
+```
+
+
+# Applying sentiment 
+# positive 
 ```{r}
 train_split <- sample(1:nrow(faang),0.8 * nrow(faang))
 
@@ -316,15 +445,19 @@ train_data<-faang%>%
 test_data<-faang %>%
   slice(-train_split)
 
+# pull the positive dictionary
 positive_dict<-textdata::lexicon_loughran() %>%
   filter(sentiment=="positive") %>%
   pull(word) %>%
   paste(collapse=" ")
 
+
 pos_dict<-list(uc=textdata::lexicon_loughran() %>%
                  filter(sentiment=="positive") %>%
                  pull(word)) %>%
   dictionary()
+head(pos_dict)
+
 
 test_data$speech_wdct <- test_data$tweet %>%
   tokens() %>%
@@ -349,6 +482,7 @@ pos_sims <- readRDS("pos_sims.rds")
 #saveRDS(pos_sims, "pos_sims.rds")
 ```
 
+# Calculate kendall accuracy using positive sentiment 
 ```{r}
 
 acc_possims<-kendall_acc(test_data$made_money,pos_sims)
@@ -360,6 +494,7 @@ acc_posbow<-kendall_acc(test_data$made_money,pos_dict_bow)
 acc_posbow
 ```
 
+# Uncertainty in economics 
 ```{r}
 uncertain_dict<-textdata::lexicon_loughran() %>%
   filter(sentiment=="uncertainty") %>%
