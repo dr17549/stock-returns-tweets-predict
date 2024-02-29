@@ -18,6 +18,7 @@ library(dplyr)
 library(sentimentr)
 library(doc2concrete)
 
+
 # r source files 
 source("TMEF_dfm.R")
 source("vectorFunctions.R") # a new one!
@@ -267,13 +268,16 @@ train_data<-faang%>%
 test_data<-faang %>%
   slice(-train_split)
 
-# # project data onto the word vector
-vdat<-vecCheck(faang$tweet,
-               vecSmall,
-               wfFile,
-               PCAtrim=1)
+vdat <- readRDS("facebook_vdat.RDS")
 
-vdat <- readRDS("faang_vdat.RDS")
+
+# # project data onto the word vector
+# vdat<-vecCheck(faang$tweet,
+               #vecSmall,
+               #wfFile,
+               #PCAtrim=1)
+
+#vdat <- readRDS("faang_vdat.RDS")
 
 # head(vdat)
 # saveRDS(vdat,file="facebook_vdat.RDS")
@@ -299,4 +303,100 @@ test_vec_predict<-predict(lasso_vec,newx = vdat_test,
 
 kendall_acc(test_vec_predict,test_data$made_money)
 
+```
+
+```{r}
+train_split <- sample(1:nrow(faang),0.8 * nrow(faang))
+
+train_data<-faang%>%
+  slice(train_split)
+
+test_data<-faang %>%
+  slice(-train_split)
+
+positive_dict<-textdata::lexicon_loughran() %>%
+  filter(sentiment=="positive") %>%
+  pull(word) %>%
+  paste(collapse=" ")
+
+pos_dict<-list(uc=textdata::lexicon_loughran() %>%
+                 filter(sentiment=="positive") %>%
+                 pull(word)) %>%
+  dictionary()
+
+test_data$speech_wdct <- test_data$tweet %>%
+  tokens() %>%
+  tokens_ngrams(n = 1) %>%
+  sapply(length)
+
+pos_dict_bow<-test_data$tweet %>%
+  tokens() %>%
+  dfm() %>%
+  dfm_lookup(pos_dict) %>%
+  convert(to="matrix") %>%
+  apply(2, function(x) x/test_data$speech_wdct)
+
+pos_sims <- readRDS("pos_sims.rds")
+
+#pos_sims<-vecSimCalc(x=test_data$tweet,
+                  #y=positive_dict,
+                  #vecfile=vecSmall,
+                  #wffile = wfFile,
+                  #PCAtrim = 1)
+
+#saveRDS(pos_sims, "pos_sims.rds")
+```
+
+```{r}
+
+acc_possims<-kendall_acc(test_data$made_money,pos_sims)
+
+acc_possims
+
+acc_posbow<-kendall_acc(test_data$made_money,pos_dict_bow)
+
+acc_posbow
+```
+
+```{r}
+uncertain_dict<-textdata::lexicon_loughran() %>%
+  filter(sentiment=="uncertainty") %>%
+  pull(word) %>%
+  paste(collapse=" ")
+
+unc_dict<-list(uc=textdata::lexicon_loughran() %>%
+                 filter(sentiment=="uncertainty") %>%
+                 pull(word)) %>%
+  dictionary()
+
+test_data$speech_wdct <- test_data$tweet %>%
+  tokens() %>%
+  tokens_ngrams(n = 1) %>%
+  sapply(length)
+
+uncertain_dict_bow<-test_data$tweet %>%
+  tokens() %>%
+  dfm() %>%
+  dfm_lookup(unc_dict) %>%
+  convert(to="matrix") %>%
+  apply(2, function(x) x/test_data$speech_wdct)
+
+#pos_sims <- readRDS("pos_sims.rds")
+
+uncertain_sims<-vecSimCalc(x=test_data$tweet,
+                  y=uncertain_dict,
+                  vecfile=vecSmall,
+                  wffile = wfFile,
+                  PCAtrim = 1)
+
+saveRDS(uncertain_sims, "uncertain_sims.rds")
+
+acc_uncsims<-kendall_acc(test_data$made_money,uncertain_sims)
+
+acc_uncsims
+
+acc_uncbow<-kendall_acc(test_data$made_money,uncertain_dict_bow)
+
+acc_uncbow
+```
 ```
