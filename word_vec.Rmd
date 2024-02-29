@@ -18,10 +18,13 @@ library(dplyr)
 library(sentimentr)
 library(doc2concrete)
 
+# undersampling 
+library(caret)
+library(ROSE)
+
 # r source files 
 source("TMEF_dfm.R")
 source("vectorFunctions.R") # a new one!
-
 
 # Classifiers
 library(naivebayes)
