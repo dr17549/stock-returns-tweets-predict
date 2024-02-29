@@ -7,6 +7,7 @@ reduced_dataset-release.csv
 group project.Rproj
 twcs.csv
 facebook_vdat.RDS
+faang_vat.RDS
 
 # Session Data files
 .RData
