@@ -19,8 +19,10 @@ library(sentimentr)
 library(doc2concrete)
 library(textclean)
 
-install.packages("stringr")
+# install.packages("stringr")
+# install.packages("pROC")
 library(stringr)
+library(pROC)
 
 # undersampling 
 library(caret)
@@ -54,16 +56,16 @@ df <- df %>%
 
 ```{r}
 # remove NAs
-rows_with_null <- sum(!complete.cases(df))
+# rows_with_null <- sum(!complete.cases(df))
 df <- na.omit(df)
 
-# remove the URLs and replace emojis and html tags 
-df$tweet <- replace_emoji(df$tweet) 
-df$tweet <- replace_url(df$tweet)  
-df$tweet <- replace_html(df$tweet)  
+# remove the URLs and replace emojis and html tags
+df$tweet <- replace_emoji(df$tweet)
+df$tweet <- replace_url(df$tweet)
+df$tweet <- replace_html(df$tweet)
 
 
-# add a new variable that indicates if it's an up or down 
+# add a new variable that indicates if it's an up or down
 df$made_money <- ifelse(df$"one_day_return" < 0, 0, 1)
 
 # df<-readRDS("df.RDS")
@@ -86,8 +88,6 @@ non_faang <- df %>%
 # head(filtered_data$tweet)
 
 ```
-
-
 
 # FAANG models (Up / Down)
 ```{r}
@@ -115,9 +115,9 @@ dfm_train <-TMEF_dfm(train_X$tweet,ngrams=1:2,custom_stop_words = custom_stop) %
 
 head(test_Y)
 
-# Read DFM from RDS file instead 
-# dfm_faang_train<-readRDS("dfm_faang_train.RDS")
-# dfm_faang_test<-readRDS("dfm_faang_test.RDS")
+# # Read DFM from RDS file instead 
+# dfm_train<-readRDS("dfm_faang_train.RDS")
+# dfm_test<-readRDS("dfm_faang_test.RDS")
 
 faang_model<-cv.glmnet(x=dfm_train,
                              y=train_Y)
@@ -129,9 +129,9 @@ dfm_test <-TMEF_dfm(test_X$tweet,
   dfm_match(colnames(dfm_train)) %>%
   convert(to="matrix")
 
-# # Save DFM into RDS file 
-# saveRDS(dfm_train,file="dfm_faang_train.RDS")
-# saveRDS(dfm_test,file="dfm_faang_test.RDS")
+# # Save DFM into RDS file
+saveRDS(dfm_train,file="dfm_faang_train.RDS")
+saveRDS(dfm_test,file="dfm_faang_test.RDS")
 
 test_predict <- predict(faang_model,
                                   newx = dfm_test)[,1]
@@ -139,6 +139,7 @@ test_predict <- predict(faang_model,
 test_predict_binary=ifelse(test_predict > 0.5,
                            1,
                            0)
+
 table(test_predict_binary,test_Y)
 
 
@@ -187,7 +188,7 @@ plotDat %>%
 ```{r}
 plot(test_predict)
 combined_df <- cbind(test_X, test_predict, test_Y)
-filtered_data <- combined_df[str_detect(combined_df$tweet, "updat"), ]
+filtered_data <- combined_df[str_detect(combined_df$tweet, "thank you"), ]
 head(filtered_data[, c('tweet', 'test_predict','test_Y')])
 
 hist(train_Y, main = 'Histogram of Outcomes', xlab = 'Values', ylab = 'Frequency', col = 'lightblue', border = 'black')
@@ -233,7 +234,7 @@ test_predict_binary=ifelse(test_predict > 0.5,
                            1,
                            0)
 
-kendall_acc(test_predict_binary,test_Y)
+# kendall_acc(test_predict_binary,non_faang$made_money)
 
 # Accuracy 
 round(100*mean(test_predict_binary==non_faang$made_money),3)
@@ -520,13 +521,14 @@ uncertain_dict_bow<-test_data$tweet %>%
 
 #pos_sims <- readRDS("pos_sims.rds")
 
-uncertain_sims<-vecSimCalc(x=test_data$tweet,
-                  y=uncertain_dict,
-                  vecfile=vecSmall,
-                  wffile = wfFile,
-                  PCAtrim = 1)
+# uncertain_sims<-vecSimCalc(x=test_data$tweet,
+#                   y=uncertain_dict,
+#                   vecfile=vecSmall,
+#                   wffile = wfFile,
+#                   PCAtrim = 1)
 
-saveRDS(uncertain_sims, "uncertain_sims.rds")
+# saveRDS(uncertain_sims, "uncertain_sims.rds")
+uncertain_sims <- readRDS("uncertain_sims.rds")
 
 acc_uncsims<-kendall_acc(test_data$made_money,uncertain_sims)
 
