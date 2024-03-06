@@ -18,7 +18,9 @@ library(kableExtra)
 library(dplyr)
 library(stm)
 library(ROSE)
+library(spacyr)
 source("TMEF_dfm.R")
+
 
 
 # Classifiers
@@ -66,16 +68,16 @@ head(merged_df)
 
 
 ```{r}
-rows_with_null <- sum(!complete.cases(df))
+rows_with_null <- sum(!complete.cases(merged_df))
 print(rows_with_null)
 
 #since they are only 150, we will drop all rows with missing data
 
-df <- na.omit(df)
+df <- na.omit(merged_df)
 
 #Some other data pre-processing: 
 #Remove html links: 
-df$tweet <- replace_url(df$tweet)
+merged_df$tweet <- replace_url(merged_df$tweet)
 
 ```
 The function replace_emoji replaces emojis with text representations 
@@ -91,9 +93,6 @@ df_emoji_identifier$tweet<- replace_emoji(df$tweet)
 ```
 
 
-```{r}
-custom_stop <- c('amazon','Facebook', '@amazon', 'netflix', '@netflix', 'apple', '@apple', 'facebook', '@facebook', 'google', '@google', 'rt','RT','Rt')
-```
 
 
 
@@ -200,7 +199,7 @@ Since all the FAANGs have positive sentiment, training on FAANG might not yield 
 Let's Zoom into FAANG: 
 ```{r}
 
-faang <- df %>%
+faang <- merged_df %>%
   filter(stock %in% c("Facebook", "Apple", "Amazon", "Netflix", "Google"))
 
 ```
@@ -310,8 +309,11 @@ facebook_dfm_train<-TMEF_dfm(facebook_train$tweet,ngrams=1,custom_stop_words = c
 ```
 
 ```{r}
-
-facebook_topicMod7<-stm(faang_small_dfm_train,K=7)
+suppressMessages({
+  suppressWarnings({
+    facebook_topicMod7 <- stm(faang_small_dfm_train, K = 7)
+  })
+})
 topicNum=facebook_topicMod7$settings$dim$K
 topicNames<-paste0("Topic",1:topicNum)
 
@@ -379,7 +381,6 @@ undersampled_faang <- ovun.sample(formula, data = faang, method = "under")$data
 table(undersampled_faang$made_money)
 ```
 
-
 #Undersampled N-grams daily
 ```{r}
 train_split <- sample(1:nrow(undersampled_faang),0.8*nrow(undersampled_faang))
@@ -439,45 +440,509 @@ recall
 
 ```
 
-
-
-
-#Regular N-grams daily
+We only kept the most popular industries and removed Facebook, because it has the most reviews and will skew the data
 ```{r}
-train_split <- sample(1:nrow(meged_df),0.8*nrow(meged_df))
+industry_df <- merged_df %>% filter(stock != "Facebook") %>% 
+  filter(industry %in% c("Automotive", "E-commerce", "Media", "Retail", "Technology"))
+```
 
-faang_train_data<-meged_df%>%
+
+```{r}
+ggplot(industry_df, aes(x = industry)) +
+  geom_bar(fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Industry",
+       x = "Industry",
+       y = "Frequency") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+```{r}
+companies <- c("Yahoo", "YHOO",
+               "Wells Fargo", "WFC",
+               "Walmart", "WMT",
+               "Volkswagen", "VOW3.DE",
+               "Vodafone", "VOD",
+               "Visa", "V",
+               "Viacom", "VIAC",
+               "Verizon", "VZ",
+               "UPS", "UPS",
+               "TripAdvisor", "TRIP",
+               "Toyota", "TM",
+               "TMobile", "TMUS",
+               "Thales", "HO.PA",
+               "Tesco", "TSCO.L",
+               "Starbucks", "SBUX",
+               "Sony", "SONY",
+               "Siemens", "SIE.DE",
+               "Shell", "RDS.A",
+               "SAP", "SAP",
+               "Santander", "SAN",
+               "Samsung", "005930.KS",
+               "salesforce.com", "CRM",
+               "Ryanair", "RYAAY",
+               "Reuters", "TRI",
+               "Pfizer", "PFE",
+               "Pepsi", "PEP",
+               "PayPal", "PYPL",
+               "P&G", "PG",
+               "Oracle", "ORCL",
+               "Nissan", "7201.T",
+               "Nike", "NKE",
+               "Next", "NXT.L",
+               "Netflix", "NFLX",
+               "Nestle", "NSRGY",
+               "Morgan Stanley", "MS",
+               "Microsoft", "MSFT",
+               "McDonald's", "MCD",
+               "Mastercard", "MA",
+               "L'Oreal", "OR",
+               "Kroger", "KR",
+               "Kellogg's", "K",
+               "JPMorgan", "JPM",
+               "John Deere", "DE",
+               "Intel", "INTC",
+               "IBM", "IBM",
+               "Hyundai", "005380.KS",
+               "HSBC", "HSBC",
+               "HP", "HPQ",
+               "Honda", "HMC",
+               "Home Depot", "HD",
+               "Heineken", "HEINY",
+               "H&M", "HM-B.ST",
+               "GSK", "GSK.L",
+               "Groupon", "GRPN",
+               "Google", "GOOGL",
+               "Goldman Sachs", "GS",
+               "Gillette", "GILC34.SA",
+               "General Electric", "GE",
+               "Ford", "F",
+               "FedEx", "FDX",
+               "Facebook", "FB",
+               "Exxon", "XOM",
+               "Expedia", "EXPE",
+               "Equinor", "EQNR",
+               "eBay", "EBAY",
+               "easyJet", "EZJ.L",
+               "Disney", "DIS",
+               "Deutsche Bank", "DB",
+               "Danone", "BN.PA",
+               "CVS Health", "CVS",
+               "Costco", "COST",
+               "Comcast", "CMCSA",
+               "Colgate", "CL",
+               "CocaCola", "KO",
+               "Citigroup", "C",
+               "Cisco", "CSCO",
+               "Chevron", "CVX",
+               "CBS", "VIAC",
+               "Carrefour", "CA.PA",
+               "Cardinal Health", "CAH",
+               "Burberry", "BRBY.L",
+               "BP", "BP",
+               "bookingcom", "BKNG",
+               "Boeing", "BA",
+               "BMW", "BMW.DE",
+               "BlackRock", "BLK",
+               "Bayer", "BAYRY",
+               "BASF", "BAS.DE",
+               "Bank of America", "BAC",
+               "Aviva", "AV.L",
+               "Audi", "NSU.DE",
+               "AT&T", "T",
+               "AstraZeneca", "AZN",
+               "ASOS", "ASC.L",
+               "Apple", "AAPL",
+               "American Express", "AXP",
+               "Amazon", "AMZN",
+               "Allianz", "ALV.DE",
+               "Adobe", "ADBE",
+               "adidas", "ADDYY",
+               "21CF", "TFCF")
+
+```
+
+#Regular N-grams daily INDUSTRY
+```{r}
+set.seed(42)
+
+custom_stop <- c('amazon','Facebook', '@amazon', 'netflix', '@netflix', 'apple', '@apple', 'facebook', '@facebook', 'google', '@google', 'rt','RT','Rt')
+
+sample <- industry_df[sample(nrow(industry_df), nrow(industry_df)*0.001), ]
+# Splitting the data into train and test sets using categorical splitting
+train_split <- sample(1:nrow(sample), 0.8 * nrow(sample))
+
+ind_train_data<-sample%>%
   slice(train_split)
 
-faang_test_data<- meged_df %>%
+ind_test_data<-sample %>%
   slice(-train_split)
 
-faang_train_Y<-faang_train_data %>%
-  pull(made_money)
-
-test_Y<-faang_test_data %>%
-  pull(made_money)
-
-dfm_faang_train_no_company_name<-TMEF_dfm(faang_train_data$tweet,ngrams=1:2, custom_stop_words = custom_stop) %>%
-  convert(to="matrix")
-
-faang_model_pros<-cv.glmnet(x=dfm_faang_train_no_company_name,
-                             y=faang_train_Y)
+# Extracting target variables
 
 
+industry_dfm_train_no_comp_names<-TMEF_dfm(ind_train_data$tweet,ngrams=1:2, custom_stop_words = companies, min.prop = 0.0)
+industry_dfm_train <-TMEF_dfm(ind_train_data$tweet,ngrams=1:2, min.prop = 0.0)
+
+
+industry_dfm_test_no_comp_names <-TMEF_dfm(ind_test_data$tweet,
+                                  ngrams=1:2, custom_stop_words = companies, min.prop=0) %>%
+                                  dfm_match(colnames(industry_dfm_train_no_comp_names))
+
+industry_dfm_test <-TMEF_dfm(ind_test_data$tweet,
+                    ngrams=1:2, min.prop=0) %>%
+                    dfm_match(colnames(industry_dfm_train))
+```
+
+```{r}
+train_Y <- ind_train_data$industry
+industry_model_no_comp_names <- cv.glmnet(x=industry_dfm_train_no_comp_names,
+                                y=train_Y,
+                                family="multinomial", alpha = 1)
+
+
+industry_model <- cv.glmnet(x=industry_dfm_train,
+                            y=train_Y,
+                            family="multinomial", alpha = 1)
+```
+
+```{r}
+
+industry_predict_label_no_comp_names<-predict(industry_model_no_comp_names,
+                                     newx = industry_dfm_test_no_comp_names,
+                                     type="class")[,1]
+
+industry_predict_label<-predict(industry_model,
+                                newx = industry_dfm_test,
+                                type="class")[,1]
+
+# raw accuracy
+mean(industry_predict_label_no_comp_names == ind_test_data$industry)
+mean(industry_predict_label == ind_test_data$industry)
+# Confusion matrix - great for multinomials!
+table(industry_predict_label,ind_test_data$industry)
+```
+```{r}
+indices_auto <- which(industry_predict_label == "Automotive" & ind_test_data$industry != "Automotive")
+
+# Extract samples where the predicted label is "automotive" but actual label differs
+mislabeled_samples_not_auto <- ind_test_data[indices_auto, ]
+
+
+# View the mislabeled samples
+examples <-mislabeled_samples_not_auto %>% filter (V1 %in% c(798214,727155, 165166))
+```
+
+
+```{r}
+spacyr::spacy_initialize()
+```
+
+```{r}
+
+# Function to extract the subject from a text
+extract_subject <- function(text) {
+  # Parse the text using SpaCy
+  parsed <- spacy_parse(text,
+                     lemma = T,
+                     dependency = T)
+  
+  # Extract the main noun (subject) from the parsed data
+  main_nouns <- parsed$lemma[parsed$dep == "nsubj"]
+  
+  if (length(main_nouns) > 1) {
+    return(paste(paste0(main_nouns, "_subj"), collapse = ", "))
+  }
+  
+  # Return the main noun (subject)
+  if(length(main_nouns) == 0) {
+    return("")
+  }
+  return(paste0(main_nouns, "_subj"))
+}
+
+```
+
+
+
+
+```{r}
+set.seed(42)
+
+custom_stop <- c('amazon','Facebook', '@amazon', 'netflix', '@netflix', 'apple', '@apple', 'facebook', '@facebook', 'google', '@google', 'rt','RT','Rt')
+
+sample <- industry_df[sample(nrow(industry_df), nrow(industry_df)*0.4), ]
+# Splitting the data into train and test sets using categorical splitting
+train_split <- sample(1:nrow(sample), 0.8 * nrow(sample))
+
+
+
+ind_train_data<-sample%>%
+  slice(train_split)
+
+ind_test_data<-sample %>%
+  slice(-train_split)
+
+ind_train_data$subject <- sapply(ind_train_data$tweet, extract_subject)
+ind_test_data$subject <- sapply(ind_test_data$tweet, extract_subject)
+
+
+
+```
+
+
+```{r}
+
+train_dfm_tweet <-TMEF_dfm(ind_train_data$tweet,ngrams=1:2, min.prop = 0.01)
+train_dfm_subject <-TMEF_dfm(ind_train_data$subject,ngrams=1, min.prop = 0.00)
+train_dfm <- cbind(train_dfm_tweet, train_dfm_subject)
+
+
+test_dfm_tweet <-TMEF_dfm(ind_test_data$tweet,
+                 ngrams=1:2,
+                 min.prop=0) %>%
+                 dfm_match(colnames(train_dfm_tweet))
+
+test_dfm_subject <-TMEF_dfm(ind_test_data$subject,
+            ngrams=1, min.prop=0) %>%
+            dfm_match(colnames(train_dfm_subject))
+
+test_dfm <- cbind(test_dfm_tweet, test_dfm_subject)
+
+
+train_Y <- ind_train_data$industry
+industry_model_with_subject <- cv.glmnet(x=train_dfm,
+                                y=train_Y,
+                                family="multinomial", alpha = 1)
+
+industry_model <- cv.glmnet(x=train_dfm_tweet,
+                                y=train_Y,
+                                family="multinomial", alpha = 1)
+```
+
+
+```{r}
+
+industry_predict_label_with_subject<-predict(industry_model_with_subject,
+                                newx = test_dfm,
+                                type="class")[,1]
+
+industry_predict_label<-predict(industry_model,
+                                newx = test_dfm_tweet,
+                                type="class")[,1]
+
+mean(industry_predict_label_with_subject == ind_test_data$industry)
+mean(industry_predict_label == ind_test_data$industry)
+```
+
+
+```{r}
+industry_model_subject_only <- cv.glmnet(x=train_dfm_subject,
+                                y=train_Y,
+                                family="multinomial", alpha = 1)
+
+industry_predict_label_subject_only<-predict(industry_model_subject_only,
+                                newx = test_dfm_subject,
+                                type="class")[,1]
+```
+
+```{r}
+industry_dfm_train_no_comp_names<-TMEF_dfm(ind_train_data$tweet,ngrams=1:2, custom_stop_words = companies, min.prop = 0.01)
+
+industry_dfm_test_no_comp_names <-TMEF_dfm(ind_test_data$tweet,
+                                  ngrams=1:2, custom_stop_words = companies, min.prop=0) %>%
+                                  dfm_match(colnames(industry_dfm_train_no_comp_names))
+
+
+industry_model_no_comp_names <- cv.glmnet(x=industry_dfm_train_no_comp_names,
+                                y=train_Y,
+                                family="multinomial", alpha = 1)
+
+
+industry_predict_label_no_comp_names<-predict(industry_model_no_comp_names,
+                                     newx = industry_dfm_test_no_comp_names,
+                                     type="class")[,1]
+
+
+```
+
+```{r}
+bench_mark <- mean("Technology" == ind_test_data$industry)
+print(paste0("benckmark_technology:", bench_mark))
+acc_model_no_comp_name <- mean(industry_predict_label_no_comp_names == ind_test_data$industry)
+print(paste0("acc_model_no_comp_name:", acc_model_no_comp_name))
+acc_model_with_subject <- mean(industry_predict_label_with_subject == ind_test_data$industry)
+print(paste0("acc_model_with_subject: " ,acc_model_with_subject))
+acc_normal_model <- mean(industry_predict_label == ind_test_data$industry)
+print(paste0("acc_normal_model: ",acc_normal_model))
+acc_model_only_subject <- mean(industry_predict_label_subject_only == ind_test_data$industry)
+print(paste0("acc_model_only_subject:", acc_model_only_subject))
+```
+```{r}
+data <- data.frame(
+  Method = c("Benchmark- All Technology","Subject Alone", "N-gram Model", "N-gram Model with Subject"),
+  Accuracy = c(bench_mark, acc_model_only_subject, acc_normal_model, acc_model_with_subject )
+)
+
+data$Method <- factor(data$Method, levels = data$Method[order(-data$Accuracy)])
+
+# Plot
+# Plot
+ggplot(data, aes(x = Method, y = Accuracy, fill = Method)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = round(Accuracy, 2)), # Add labels for each bar value
+            hjust = -0.1, # Adjust horizontal justification
+            vjust = 0.5, # Adjust vertical justification
+            size = 3) + # Adjust text size
+  labs(title = "Accuracy Comparison") + # Swap x and y labels
+  coord_flip() + # Flip coordinates to make it horizontal
+  theme_minimal() + 
+  guides(fill = FALSE) + # Remove legend
+  theme(axis.title.x = element_blank(), # Remove x-axis label
+        axis.title.y = element_blank()) # Remove y-axis label
+```
+
+```{r}
+table(industry_predict_label,ind_test_data$industry)
+```
+
+
+
+
+```{r}
+
+ind_test_data$predict_1 <- industry_predict_label
+ind_test_data$predict_2 <- industry_predict_label_with_subject
+indices_auto <- which(industry_predict_label != ind_test_data$industry & industry_predict_label_with_subject == ind_test_data$industry)
+
+
+
+# Extract samples where the predicted label is "automotive" but actual label differs , 	
+
+mislabeled_samples_not_auto <- ind_test_data[indices_auto, ]
+
+# View the mislabeled samples
+examples_2 <-mislabeled_samples_not_auto %>% filter (V1 %in% c(405288,681439, 564024,397220,819101, 399185, 186295, 51097, 650525)) %>% select(V1, tweet, subject, predict_1,predict_2)
+
+```
+
+
+```{r}
+data <- data.frame(
+  Method = c("Benchmark- All Technology", "N-gram Model (with company names as stop words)", "N-gram Model"),
+  Accuracy = c(bench_mark, acc_model_no_comp_name, acc_normal_model)
+)
+
+data$Method <- factor(data$Method, levels = data$Method[order(-data$Accuracy)])
+# Plot
+# Plot
+ggplot(data, aes(x = Method, y = Accuracy, fill = Method)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = round(Accuracy, 2)), # Add labels for each bar value
+            hjust = -0.1, # Adjust horizontal justification
+            vjust = 0.5, # Adjust vertical justification
+            size = 3) + # Adjust text size
+  labs(title = "Accuracy Comparison") + # Swap x and y labels
+  coord_flip() + # Flip coordinates to make it horizontal
+  theme_minimal() + 
+  guides(fill = FALSE) + # Remove legend
+  theme(axis.title.x = element_blank(), # Remove x-axis label
+        axis.title.y = element_blank(), # Remove y-axis label
+        plot.margin = margin(5, 5, 5, 5, "cm"))
+```
+
+
+#Try transfer learning: train on 50 companies, and see how well you predict on another 50... 
+
+```{r}
+my_sample <- industry_df[sample(nrow(industry_df), nrow(industry_df)*0.4), ]
+print(length(my_sample))
+shuffled_stocks <- sample(unique(my_sample$stock))
+
+# Determine the midpoint for splitting
+midpoint <- length(shuffled_stocks) / 2
+
+# Split the shuffled stock names into train and test sets
+train_stocks <- shuffled_stocks[1:midpoint]
+test_stocks <- shuffled_stocks[(midpoint + 1):length(shuffled_stocks)]
+
+# Filter the dataframe based on train and test stocks
+train_data <- my_sample[my_sample$stock %in% train_stocks, ]
+test_data <- my_sample[my_sample$stock %in% test_stocks, ]
+
+# Print the number of stocks in train and test sets
+print(paste("Number of stocks in train set:", nrow(train_data)))
+print(paste("Number of stocks in test set:", nrow(test_data)))
+
+
+```
+
+```{r}
+custom_stop <- c('amazon','Facebook', '@amazon', 'netflix', '@netflix', 'apple', '@apple', 'facebook', '@facebook', 'google', '@google', 'rt','RT','Rt')
+
+industry_dfm_train<-TMEF_dfm(train_data$tweet,ngrams=1, custom_stop_words = custom_stop, min.prop = 0.01)
+
+industry_dfm_test<-TMEF_dfm(test_data$tweet,
+                           ngrams=1,min.prop=0) %>%
+  dfm_match(colnames(industry_dfm_train))
+```
+
+
+```{r}
+train_Y <- train_data$industry
+industry_model<-
+  cv.glmnet(x=industry_dfm_train,
+            y=train_Y,
+            family="multinomial", alpha = 1)
+```
+
+```{r}
+# With type="class", you can get a single predicted label for each document
+industry_predict_label<-predict(industry_model,
+                            newx = industry_dfm_test,
+                            type="class")[,1]
+
+# raw accuracy
+mean(industry_predict_label==test_data$industry)
+mean("Technology"==test_data$industry)
+
+# Confusion matrix - great for multinomials!
+
+table(industry_predict_label,test_data$industry)
+```
+
+
+
+```{r}
 dfm_faang_test_no_company_name<-TMEF_dfm(faang_test_data$tweet,
                                ngrams=1:2,
-                               min.prop = 0, custom_stop_words = custom_stop) %>%
+                               min.prop = 0) %>%
   dfm_match(colnames(dfm_faang_train_no_company_name)) %>%
   convert(to="matrix")
 
-faang_test_predict_pros<-predict(faang_model_pros,
-                                  newx = dfm_faang_test_no_company_name)[,1]
 
-hist(test_Y)
 
-head(faang_test_predict_pros)
+# Evaluate model performance, e.g., accuracy, confusion matrix, etc.
 ```
+
+
+
+
+```{r}
+
+# Predict on test set
+faang_test_predict_pros <- predict(faang_model_pros, 
+                                   newx = dfm_faang_test_no_company_name, 
+                                   type = "class")[,1]       # Predict class labels
+accuracy_score <- mean(faang_test_predict_pros == test_Y)
+
+# Print the accuracy score
+print(paste("Accuracy Score:", accuracy_score))
+```
+```{r}
+table(faang_test_predict_pros,Y_test)
+```
+
 
 
 ```{r}
@@ -657,7 +1122,6 @@ kendalls_acc
 
 
 #Daily Aggregations
-
 ```{r}
 daily_aggregated <- df %>%
   group_by(day_date = lubridate::floor_date(date, unit = "day"), stock) %>%
@@ -762,47 +1226,12 @@ weekly_aggregated_faang <- faang %>%
 ```
 
 
-```{r}
-weekly_aggregated_faang$made_money <- ifelse(weekly_aggregated_faang$seven_day_return < 0, 0, 1)
-
-train_split <- sample(1:nrow(weekly_aggregated_faang),0.8*nrow(weekly_aggregated_faang))
-
-faang_train_data_weekly<-weekly_aggregated_faang %>%
-  slice(train_split)
-
-faang_test_data_weekly<-weekly_aggregated_faang %>%
-  slice(-train_split)
-
-faang_train_Y_weekly<-faang_train_data_weekly %>%
-  pull(made_money)
-
-test_Y_weekly<-faang_test_data_weekly %>%
-  pull(made_money)
-
-dfm_faang_train_weekly<-TMEF_dfm(faang_train_data_weekly$aggregated_tweets,ngrams=1:2) %>%
-  convert(to="matrix")
 
 
 
-```
-```{r}
-
-```
-
-
-```{r}
-faang_model_weekly <-cv.glmnet(x=dfm_faang_train_weekly,
-                             y=faang_train_Y_weekly)
-
-dfm_faang_test_weekly<-TMEF_dfm(faang_test_data_weekly$aggregated_tweets,
-                               ngrams=1:2,
-                               min.prop = 0) %>%
-  dfm_match(colnames(dfm_faang_train_weekly)) %>%
-  convert(to="matrix")
 
 
 
-```
 
 
 
